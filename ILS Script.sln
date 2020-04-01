@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.1062
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ILS Script", "ILS Script\ILS Script.csproj", "{DA70BE36-902C-43ED-A072-CDF3544E0EE2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DA70BE36-902C-43ED-A072-CDF3544E0EE2}.Debug|x64.ActiveCfg = Debug|x64
+		{DA70BE36-902C-43ED-A072-CDF3544E0EE2}.Debug|x64.Build.0 = Debug|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {691DEBBD-A17E-400E-92D3-A2D01EC33292}
+	EndGlobalSection
+EndGlobal
