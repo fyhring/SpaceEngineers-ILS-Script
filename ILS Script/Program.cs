@@ -21,62 +21,530 @@ namespace IngameScript
 {
     partial class Program : MyGridProgram
     {
-        // This file contains your actual script.
-        //
-        // You can either keep all your code here, or you can create separate
-        // code files to make your program easier to navigate while coding.
-        //
-        // In order to add a new utility class, right-click on your project, 
-        // select 'New' then 'Add Item...'. Now find the 'Space Engineers'
-        // category under 'Visual C# Items' on the left hand side, and select
-        // 'Utility Class' in the main area. Name it in the box below, and
-        // press OK. This utility class will be merged in with your code when
-        // deploying your final script.
-        //
-        // You can also simply create a new utility class manually, you don't
-        // have to use the template if you don't want to. Just do so the first
-        // time to see what a utility class looks like.
-        // 
-        // Go to:
-        // https://github.com/malware-dev/MDK-SE/wiki/Quick-Introduction-to-Space-Engineers-Ingame-Scripts
-        //
-        // to learn more about ingame scripts.
+        #region mdk preserve
+        // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
+        string ILSReceiverBlockName = "Localizer";
+
+        string mainScreensTag = "ILS Main";
+
+        string gsScreensTag = "ILS GS";
+
+        string antennaName = "ILS Receiver";
+
+        string antennaChannel = "channel-ILS";
+
+        double GSAimAngle = 10;
+
+        // DO NOT EDIT ANYTHING BELOW THIS COMMENT UNLESS YOU KNOW WHAT YOU'RE DOING!
+        #endregion
+
+        // Holds the access to the chosen storage facilitator.
+        MyIni config = new MyIni();
+
+        // Set this to false to use Storage rather than customData.
+        bool useCustomData = true; // Default set to true
+
+        bool SetupComplete = false;
+
+        bool ShipShouldListen = true;
+
+        bool ShipHasSelectedILS = false;
+
+        IMyShipController cockpitBlock;
+        IMyTerminalBlock referenceBlock;
+        IMyLaserAntenna antenna;
+
+        Vector3D ShipVector;
+
+        Vector3D GravVector, GravVectorNorm, ShipVectorNorm;
+
+        List<IMyTerminalBlock> MainLCDScreens;
+
+        List<IMyTerminalBlock> GSLCDScreens;
+
 
         public Program()
         {
-            // The constructor, called only once every session and
-            // always before any other method is called. Use it to
-            // initialize your script. 
-            //     
-            // The constructor is optional and can be removed if not
-            // needed.
-            // 
-            // It's recommended to set Runtime.UpdateFrequency 
-            // here, which will allow your script to run itself without a 
-            // timer block.
+            Runtime.UpdateFrequency = UpdateFrequency.Once | UpdateFrequency.Update10;
         }
 
-        public void Save()
+
+        public void Setup()
         {
-            // Called when the program needs to save its state. Use
-            // this method to save your state to the Storage field
-            // or some other means. 
-            // 
-            // This method is optional and can be removed if not
-            // needed.
+            // Cockpit
+            List<IMyTerminalBlock> cockpitListReferences = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(ILSReceiverBlockName, cockpitListReferences);
+            if (cockpitListReferences.Count == 0)
+            {
+                throw new Exception("No cockpit found! Check the naming tag.");
+            }
+
+            cockpitBlock = (IMyShipController)cockpitListReferences[0];
+            referenceBlock = cockpitListReferences[0];
+
+            // Antenna
+            List<IMyTerminalBlock> antennaListReferences = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(antennaName, antennaListReferences);
+
+            if (antennaListReferences.Count == 0)
+            {
+                throw new Exception("No ILS Receiver Antenna! Check naming tag.");
+            }
+
+            antenna = (IMyLaserAntenna)antennaListReferences[0];
+            IGC.RegisterBroadcastListener(antennaChannel);
+
+            // Main Screen
+            MainLCDScreens = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(mainScreensTag, MainLCDScreens);
+            if (MainLCDScreens.Count == 0)
+            {
+                throw new Exception("No Main LCD found!");
+            }
+
+            // GS Screen
+            GSLCDScreens = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(gsScreensTag, GSLCDScreens);
+            if (GSLCDScreens.Count == 0)
+            {
+                throw new Exception("No G/S LCD found!");
+            }
+
+            // Mark setup as completed.
+            SetupComplete = true;
+            Echo("Setup complete.");
         }
+
 
         public void Main(string argument, UpdateType updateSource)
         {
-            // The main entry point of the script, invoked every time
-            // one of the programmable block's Run actions are invoked,
-            // or the script updates itself. The updateSource argument
-            // describes where the update came from. Be aware that the
-            // updateSource is a  bitfield  and might contain more than 
-            // one update type.
-            // 
-            // The method itself is required, but the arguments above
-            // can be removed if not needed.
+            if (!SetupComplete)
+            {
+                Echo("Running setup.");
+                Setup();
+                InitializeStorage();
+            }
+
+
+            /*
+                User Commands:
+                - Update
+                - Listen (even while connected to an ILS)
+                - StopListening
+                - Disconnect (also runs StopListening)
+            */
+            if (!argument.Equals(""))
+            {
+                switch (argument.ToLower())
+                {
+                    case "update":
+                        InitializeStorage();
+                        break;
+                    case "listen":
+                        ShipShouldListen = true;
+                        break;
+                    case "stoplistening":
+                        ShipShouldListen = false;
+                        break;
+                    case "disconnect":
+                        ShipHasSelectedILS = false;
+                        ShipShouldListen = false;
+                        break;
+                }
+            }
+
+            // Update the ship and gravity vectors.
+            UpdateVectors();
+
+
+            // Main Logic
+            if (!ShipHasSelectedILS)
+            {
+                Echo("Not connected");
+            }
+            else
+            {
+                Echo("Is connected!");
+            }
+
+            if (ShipShouldListen)
+            {
+                // If ship is connected to an ILS and is listening, another ILS closer by will override
+                // the active transmitter. Normally ShipShouldListen will be false once connected.
+                SearchForILSMessages();
+            }
+
+            if (ShipHasSelectedILS)
+            {
+                HandleILS();
+            }
         }
+
+
+
+        public void HandleILS()
+        {
+            // Custom Data
+            string LOCGPS = config.Get("ActiveLocalizerData", "GPS").ToString();
+            string GSGPS = config.Get("ActiveGlideSlopeData", "GPS").ToString();
+            double RWYHDG = config.Get("ActiveLocalizerData", "RWYHDG").ToDouble(-1);
+
+            /*if(!GSGPS.ToLower().Contains("gps")) {
+                Echo("Arg: "+ GSGPS.ToLower().ToString());
+                Echo("Error: G/S GPS coordinate " + GSGPS.ToString()
+                    + " could not be understod\nPlease input coordinates in the form\nGPS:[Name of waypoint]:[x]:[y]:[z]:");
+                return;
+            }*/
+
+            // Waypoint vevtors
+            string locWayPointName, gsWayPointName;
+            Vector3D LOCWaypointVector = CreateVectorFromGPSCoordinateString(LOCGPS, out locWayPointName);
+            Vector3D GSWaypointVector = CreateVectorFromGPSCoordinateString(GSGPS, out gsWayPointName);
+
+            // Slant range distance
+            double Distance = CalculateILSDistance(GSWaypointVector);
+
+            // Localizer
+            double Bearing, RBearing, Deviation, Track;
+            CalculateILSLocalizer(LOCWaypointVector, RWYHDG, out Bearing, out RBearing, out Deviation, out Track);
+
+            // GlideSlope
+            double GSAngle;
+            CalculateILSGlideSlope(GSWaypointVector, out GSAngle);
+
+
+            // LOC & G/S Instruments
+            string LOCInstrumentString, LOCInstrumentIndicator, GSInstrumentString, GSInstrumentIndicator;
+            BuildLocalizerAndGlideSlopeIndications(
+                Deviation,
+                GSAngle,
+                out LOCInstrumentString,
+                out LOCInstrumentIndicator,
+                out GSInstrumentString,
+                out GSInstrumentIndicator
+            );
+
+
+            // LCD
+            for (int i = 0; i < MainLCDScreens.Count; i++)
+            {
+                (MainLCDScreens[i] as IMyTextPanel).WriteText(
+                    "LOC Name: " + locWayPointName + "\n" +
+                    "G/S Name: " + gsWayPointName + "\n" +
+                    "RWY HDG: " + RWYHDG.ToString() + "\n" +
+                    "\n" +
+                    "Bearing: " + Math.Round(Bearing).ToString() + "\n" +
+                    "Relative Bearing: " + Math.Round(RBearing).ToString() + "\n" +
+                    "Track: " + Math.Round(Track).ToString() + "\n" +
+                    "Deviation: " + Math.Round(Deviation).ToString() + "\n" +
+                    "Angle: " + Math.Round(GSAngle).ToString() + "deg\n" +
+                    "Distance: " + Math.Round(Distance).ToString() + "\n" +
+                    LOCInstrumentString + "\n" +
+                    LOCInstrumentIndicator
+                , false);
+            }
+
+            var GSLCDScreens = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName("Glideslope", GSLCDScreens);
+            (GSLCDScreens[0] as IMyTextPanel).WriteText(GSInstrumentString + "\n" + GSInstrumentIndicator);
+        }
+
+
+        public void BuildLocalizerAndGlideSlopeIndications(
+            double Deviation,
+            double Angle,
+            out string LOCInstrumentString,
+            out string LOCInstrumentIndicator,
+            out string GSInstrumentString,
+            out string GSInstrumentIndicator
+        )
+        {
+            LOCInstrumentString = "*-----*-----|-----*-----*";
+            string stdLOCInstrumentIndicator = "------------------------^------------------------";
+
+            try
+            {
+                LOCInstrumentIndicator = stdLOCInstrumentIndicator.Substring((int)Deviation + 12, 25);
+            }
+            catch (Exception)
+            {
+                if (Deviation > 12)
+                {
+                    LOCInstrumentIndicator = "^------------------------";
+                }
+                else if (Deviation < -12)
+                {
+                    LOCInstrumentIndicator = "------------------------^";
+                }
+                else
+                {
+                    LOCInstrumentIndicator = "-----------???-----------";
+                }
+            }
+
+            GSInstrumentString = "*-----*-----|-----*-----*";
+            string stdGSInstrumentIndicator = "------------------------^------------------------";
+
+            try
+            {
+                GSInstrumentIndicator = stdGSInstrumentIndicator.Substring((int)Angle - (int)GSAimAngle + 12, 25);
+            }
+            catch (Exception)
+            {
+                if (Angle > 12)
+                {
+                    GSInstrumentIndicator = "^------------------------";
+                }
+                else if (Angle < -12)
+                {
+                    GSInstrumentIndicator = "------------------------^";
+                }
+                else
+                {
+                    GSInstrumentIndicator = "-----------???-----------";
+                }
+            }
+        }
+
+
+        public MyIni ParseBroadcastedILSMessage(MyIGCMessage message)
+        {
+            long sender = message.Source;
+
+            Echo("Message received with tag" + message.Tag + "\n\r");
+            Echo("from address " + sender.ToString() + ": \n\r");
+
+            MyIni iniMessage = new MyIni();
+            MyIniParseResult iniResult;
+            if (!iniMessage.TryParse(message.Data.ToString(), out iniResult))
+            {
+                Echo("Failed to parse data. Data: " + message.Data.ToString());
+                throw new Exception(iniResult.ToString());
+            }
+
+            return iniMessage;
+        }
+
+
+        public void TriggerUpdate()
+        {
+            Echo("Trigger update..");
+        }
+
+
+        public void SearchForILSMessages()
+        {
+            List<MyIni> ActiveILSTransmitters = new List<MyIni>();
+            List<IMyBroadcastListener> listeners = new List<IMyBroadcastListener>();
+            IGC.GetBroadcastListeners(listeners);
+
+            listeners.ForEach(listener => {
+                if (!listener.IsActive) return;
+                if (listener.Tag != antennaChannel) return;
+                if (listener.HasPendingMessage)
+                {
+                    ActiveILSTransmitters.Add(
+                        ParseBroadcastedILSMessage(listener.AcceptMessage())
+                    );
+                }
+            });
+
+            double shortestDistance = 99999;
+            MyIni selectedILSTransmitter = new MyIni();
+            ActiveILSTransmitters.ForEach(transmitter =>
+            {
+                string _gsGPS = transmitter.Get("ActiveGlideSlopeData", "GPS").ToString();
+                string _gsName;
+                Vector3D _gsWaypointVector = CreateVectorFromGPSCoordinateString(_gsGPS, out _gsName);
+                double distance = Math.Round(Vector3D.Distance(_gsWaypointVector, ShipVector), 2);
+                if (distance < shortestDistance)
+                {
+                    selectedILSTransmitter = transmitter;
+                }
+            });
+
+            if (ActiveILSTransmitters.Count != 0)
+            {
+                OverrideStorage(selectedILSTransmitter);
+                ShipShouldListen = false;
+                ShipHasSelectedILS = true;
+                TriggerUpdate();
+            }
+        }
+
+
+        public void SendMessage(string message)
+        {
+            IGC.SendBroadcastMessage(antennaChannel, message, TransmissionDistance.TransmissionDistanceMax);
+        }
+
+
+        public void UpdateVectors()
+        {
+            GravVector = cockpitBlock.GetNaturalGravity();
+            GravVectorNorm = Vector3D.Normalize(GravVector);
+
+            ShipVector = referenceBlock.GetPosition();
+            ShipVectorNorm = Vector3D.Normalize(ShipVector);
+        }
+
+
+        public void CalculateILSLocalizer(
+            Vector3D LOCWaypointVector,
+            double RWYHDG,
+            out double Bearing,
+            out double RBearing,
+            out double Deviation,
+            out double Track
+        )
+        {
+
+            Vector3D RForwardVector, VectorNorth, RVectorNorth, LOCWaypointNorm, LReject;
+            LOCWaypointNorm = Vector3D.Normalize(LOCWaypointVector);
+
+            // Localizer
+            RForwardVector = Vector3D.Reject(cockpitBlock.WorldMatrix.Forward, LOCWaypointNorm);
+            VectorNorth = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
+            RVectorNorth = Vector3D.Reject(LOCWaypointNorm, GravVectorNorm);
+            Bearing = Math.Acos(Vector3D.Dot(Vector3D.Normalize(RForwardVector), Vector3D.Normalize(VectorNorth))) * 180 / Math.PI;
+            RBearing = Math.Acos(Vector3D.Dot(Vector3D.Normalize(RForwardVector), Vector3D.Normalize(RVectorNorth))) * 180 / Math.PI;
+
+            if (Math.Acos(Vector3D.Dot(cockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
+            {
+                LReject = Vector3D.Reject(cockpitBlock.WorldMatrix.Right, GravVectorNorm);
+            }
+            else
+            {
+                LReject = Vector3D.Reject(cockpitBlock.WorldMatrix.Left, GravVectorNorm);
+            }
+
+            Vector3D projection = Vector3D.ProjectOnVector(ref LReject, ref LOCWaypointNorm);
+            Vector3D projectionNorm = Vector3D.Normalize(projection);
+
+            if (LReject.GetDim(1) <= 0)
+            {
+                Bearing = 360 - Bearing;
+            }
+
+            if (projectionNorm.GetDim(0) < 0)
+            {
+                RBearing = 0 - RBearing;
+            }
+
+            Track = Bearing + RBearing;
+            if (Track > 360)
+            {
+                Track -= 360;
+            }
+            if (Track < 0)
+            {
+                Track += 360;
+            }
+
+            Deviation = RWYHDG - Track;
+        }
+
+
+        public void CalculateILSGlideSlope(Vector3D GSWaypointVector, out double Angle)
+        {
+            Vector3D GSNegatedShipVector = Vector3D.Negate(ShipVector);
+            Vector3D GSResultantVector = GSWaypointVector + GSNegatedShipVector;
+            Vector3D GSResultantVectorNorm = Vector3D.Normalize(GSResultantVector);
+
+            Angle = 90 - Math.Acos(Vector3D.Dot(GSResultantVectorNorm, GravVectorNorm)) * 180 / Math.PI;
+        }
+        
+
+        public double CalculateILSDistance(Vector3D GSWaypointVector)
+        {
+            return Math.Round(Vector3D.Distance(GSWaypointVector, ShipVector), 2);
+        }
+
+
+        public void InitializeStorage()
+        {
+            Echo("Setting up storage..");
+            if (useCustomData == true)
+            {
+                MyIniParseResult iniResult;
+                if (!config.TryParse(Me.CustomData, out iniResult))
+                {
+                    Echo("Try setting useCustomData to false.");
+                    throw new Exception(iniResult.ToString());
+                }
+            }
+            else
+            {
+                config.TryParse(Storage);
+            }
+
+            double __RWYHDG = config.Get("ActiveLocalizerData", "RWYHDG").ToDouble(-1);
+            if (__RWYHDG.Equals(-1))
+            {
+                config.Set("ActiveLocalizerData", "RWYHDG", 0);
+                config.Set("ActiveLocalizerData", "GPS", "N/A");
+                config.Set("ActiveGlideSlopeData", "GPS", "N/A");
+
+                if (useCustomData == true)
+                {
+                    Me.CustomData = config.ToString();
+                }
+                else
+                {
+                    Storage = config.ToString();
+                }
+            }
+
+            Echo("Storage setup complete.");
+        }
+
+
+        public void OverrideStorage(MyIni config)
+        {
+            if (useCustomData == true)
+            {
+                Me.CustomData = config.ToString();
+            }
+            else
+            {
+                Storage = config.ToString();
+            }
+        }
+
+
+        public static Vector3D CreateVectorFromGPSCoordinateString(string gps, out string name)
+        {
+            string[] splitCoord = gps.Split(':');
+
+            if (splitCoord.Length < 5)
+            {
+                throw new Exception("Error: GPS coordinate " + gps + " could not be understod\nPlease input coordinates in the form\nGPS:[Name of waypoint]:[x]:[y]:[z]:");
+            }
+
+            name = splitCoord[1];
+
+            Vector3D vector;
+            vector.X = StringToDouble(splitCoord[2]);
+            vector.Y = StringToDouble(splitCoord[3]);
+            vector.Z = StringToDouble(splitCoord[4]);
+
+            return vector;
+        }
+
+
+        public static double StringToDouble(string value)
+        {
+            double n;
+            bool isDouble = double.TryParse(value, out n);
+            if (isDouble)
+            {
+                return n;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
     }
 }
