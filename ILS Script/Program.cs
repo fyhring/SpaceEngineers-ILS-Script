@@ -23,6 +23,9 @@ namespace IngameScript
     {
         #region mdk preserve
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
+
+        double version = 0.2;
+
         string ILSReceiverBlockName = "Localizer";
 
         string mainScreensTag = "ILS Main";
@@ -123,6 +126,9 @@ namespace IngameScript
                 Echo("Running setup.");
                 Setup();
                 InitializeStorage();
+            } else
+            {
+                Echo("Skipping setup");
             }
 
 
@@ -167,11 +173,14 @@ namespace IngameScript
                 Echo("Is connected!");
             }
 
+            Echo("ShipShouldListen: " + ShipShouldListen.ToString());
+
             if (ShipShouldListen)
             {
                 // If ship is connected to an ILS and is listening, another ILS closer by will override
                 // the active transmitter. Normally ShipShouldListen will be false once connected.
                 SearchForILSMessages();
+                return;
             }
 
             if (ShipHasSelectedILS)
@@ -185,10 +194,16 @@ namespace IngameScript
         public void HandleILS()
         {
             // Custom Data
-            string LOCGPS = config.Get("ActiveLocalizerData", "GPS").ToString();
-            string GSGPS = config.Get("ActiveGlideSlopeData", "GPS").ToString();
-            double RWYHDG = config.Get("ActiveLocalizerData", "RWYHDG").ToDouble(-1);
+            string LOCGPS, GSGPS;
+            double RWYHDG;
+            Echo("Getting data");
 
+            LOCGPS = config.Get("LocalizerData", "GPS").ToString();
+            GSGPS = config.Get("GlideSlopeData", "GPS").ToString();
+            RWYHDG = config.Get("LocalizerData", "RWYHDG").ToDouble(-1);
+
+
+            // TODO Evaluate if this is nessecary
             /*if(!GSGPS.ToLower().Contains("gps")) {
                 Echo("Arg: "+ GSGPS.ToLower().ToString());
                 Echo("Error: G/S GPS coordinate " + GSGPS.ToString()
@@ -208,6 +223,7 @@ namespace IngameScript
             double Bearing, RBearing, Deviation, Track;
             CalculateILSLocalizer(LOCWaypointVector, RWYHDG, out Bearing, out RBearing, out Deviation, out Track);
 
+
             // GlideSlope
             double GSAngle;
             CalculateILSGlideSlope(GSWaypointVector, out GSAngle);
@@ -225,9 +241,11 @@ namespace IngameScript
             );
 
 
+
             // LCD
             for (int i = 0; i < MainLCDScreens.Count; i++)
             {
+                // TODO Improve printing to screens!
                 (MainLCDScreens[i] as IMyTextPanel).WriteText(
                     "LOC Name: " + locWayPointName + "\n" +
                     "G/S Name: " + gsWayPointName + "\n" +
@@ -244,8 +262,7 @@ namespace IngameScript
                 , false);
             }
 
-            var GSLCDScreens = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName("Glideslope", GSLCDScreens);
+            // TODO Allow for multiple screens! Make a method for printing to multiple screens!
             (GSLCDScreens[0] as IMyTextPanel).WriteText(GSInstrumentString + "\n" + GSInstrumentIndicator);
         }
 
@@ -338,6 +355,8 @@ namespace IngameScript
             List<IMyBroadcastListener> listeners = new List<IMyBroadcastListener>();
             IGC.GetBroadcastListeners(listeners);
 
+            // Parse any messages from active listeners on the selected channel.
+            Echo("Listeners: " + listeners.Count.ToString());
             listeners.ForEach(listener => {
                 if (!listener.IsActive) return;
                 if (listener.Tag != antennaChannel) return;
@@ -351,9 +370,12 @@ namespace IngameScript
 
             double shortestDistance = 99999;
             MyIni selectedILSTransmitter = new MyIni();
+
+            Echo("Transmitters: " + ActiveILSTransmitters.Count.ToString());
+            // Select the transmitter closest to the ship.
             ActiveILSTransmitters.ForEach(transmitter =>
             {
-                string _gsGPS = transmitter.Get("ActiveGlideSlopeData", "GPS").ToString();
+                string _gsGPS = transmitter.Get("GlideSlopeData", "GPS").ToString();
                 string _gsName;
                 Vector3D _gsWaypointVector = CreateVectorFromGPSCoordinateString(_gsGPS, out _gsName);
                 double distance = Math.Round(Vector3D.Distance(_gsWaypointVector, ShipVector), 2);
@@ -365,6 +387,7 @@ namespace IngameScript
 
             if (ActiveILSTransmitters.Count != 0)
             {
+                Echo("Override Storage..");
                 OverrideStorage(selectedILSTransmitter);
                 ShipShouldListen = false;
                 ShipHasSelectedILS = true;
@@ -478,12 +501,12 @@ namespace IngameScript
                 config.TryParse(Storage);
             }
 
-            double __RWYHDG = config.Get("ActiveLocalizerData", "RWYHDG").ToDouble(-1);
+            double __RWYHDG = config.Get("LocalizerData", "RWYHDG").ToDouble(-1);
             if (__RWYHDG.Equals(-1))
             {
-                config.Set("ActiveLocalizerData", "RWYHDG", 0);
-                config.Set("ActiveLocalizerData", "GPS", "N/A");
-                config.Set("ActiveGlideSlopeData", "GPS", "N/A");
+                config.Set("LocalizerData", "RWYHDG", 0);
+                config.Set("LocalizerData", "GPS", "N/A");
+                config.Set("GlideSlopeData", "GPS", "N/A");
 
                 if (useCustomData == true)
                 {
@@ -509,6 +532,8 @@ namespace IngameScript
             {
                 Storage = config.ToString();
             }
+
+            InitializeStorage();
         }
 
 
