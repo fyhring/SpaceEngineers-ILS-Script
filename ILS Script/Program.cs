@@ -24,17 +24,17 @@ namespace IngameScript
         #region mdk preserve
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
 
-        double version = 0.2;
+        double Version = 0.2;
 
-        string ILSReceiverBlockName = "Localizer";
+        string CockpitTag = "ILS Cockpit";
 
-        string mainScreensTag = "ILS Main";
+        string AntennaTag = "ILS Antenna";
 
-        string gsScreensTag = "ILS GS";
+        string AntennaChannel = "channel-ILS";
 
-        string antennaName = "ILS Receiver";
+        static double LOCFullScaleDeflectionAngle = 12;
 
-        string antennaChannel = "channel-ILS";
+        static double GSFullScaleDeflectionAngle = 12;
 
         double GSAimAngle = 10;
 
@@ -53,17 +53,19 @@ namespace IngameScript
 
         bool ShipHasSelectedILS = false;
 
-        IMyShipController cockpitBlock;
-        IMyTerminalBlock referenceBlock;
-        IMyLaserAntenna antenna;
+        int SurfaceIndex = 1;
+
+        IMyShipController CockpitBlock;
+        IMyTerminalBlock ReferenceBlock;
+        IMyRadioAntenna Antenna;
 
         Vector3D ShipVector;
 
         Vector3D GravVector, GravVectorNorm, ShipVectorNorm;
 
-        List<IMyTerminalBlock> MainLCDScreens;
+        List<IMyTerminalBlock> LCDScreens;
 
-        List<IMyTerminalBlock> GSLCDScreens;
+        ILSDataSet ILSData;
 
 
         public Program()
@@ -76,42 +78,27 @@ namespace IngameScript
         {
             // Cockpit
             List<IMyTerminalBlock> cockpitListReferences = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName(ILSReceiverBlockName, cockpitListReferences);
+            GridTerminalSystem.SearchBlocksOfName(CockpitTag, cockpitListReferences);
             if (cockpitListReferences.Count == 0)
             {
                 throw new Exception("No cockpit found! Check the naming tag.");
             }
 
-            cockpitBlock = (IMyShipController)cockpitListReferences[0];
-            referenceBlock = cockpitListReferences[0];
+            CockpitBlock = (IMyShipController)cockpitListReferences[0];
+            ReferenceBlock = cockpitListReferences[0];
 
             // Antenna
             List<IMyTerminalBlock> antennaListReferences = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName(antennaName, antennaListReferences);
+            GridTerminalSystem.SearchBlocksOfName(AntennaTag, antennaListReferences);
 
             if (antennaListReferences.Count == 0)
             {
                 throw new Exception("No ILS Receiver Antenna! Check naming tag.");
             }
 
-            antenna = (IMyLaserAntenna)antennaListReferences[0];
-            IGC.RegisterBroadcastListener(antennaChannel);
+            Antenna = (IMyRadioAntenna)antennaListReferences[0];
+            IGC.RegisterBroadcastListener(AntennaChannel);
 
-            // Main Screen
-            MainLCDScreens = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName(mainScreensTag, MainLCDScreens);
-            if (MainLCDScreens.Count == 0)
-            {
-                throw new Exception("No Main LCD found!");
-            }
-
-            // GS Screen
-            GSLCDScreens = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName(gsScreensTag, GSLCDScreens);
-            if (GSLCDScreens.Count == 0)
-            {
-                throw new Exception("No G/S LCD found!");
-            }
 
             // Mark setup as completed.
             SetupComplete = true;
@@ -183,15 +170,24 @@ namespace IngameScript
                 return;
             }
 
+            
             if (ShipHasSelectedILS)
             {
-                HandleILS();
+                ILSData = HandleILS();
             }
+
+            /*VORDataSet VORData;
+            if (ShipHasSelectedVOR)
+            {
+                VORData = HandleVOR();
+            }*/
+
+            DrawToSurfaces(ILSData);
         }
 
 
 
-        public void HandleILS()
+        public ILSDataSet HandleILS()
         {
             // Custom Data
             string LOCGPS, GSGPS;
@@ -202,14 +198,6 @@ namespace IngameScript
             GSGPS = config.Get("GlideSlopeData", "GPS").ToString();
             RWYHDG = config.Get("LocalizerData", "RWYHDG").ToDouble(-1);
 
-
-            // TODO Evaluate if this is nessecary
-            /*if(!GSGPS.ToLower().Contains("gps")) {
-                Echo("Arg: "+ GSGPS.ToLower().ToString());
-                Echo("Error: G/S GPS coordinate " + GSGPS.ToString()
-                    + " could not be understod\nPlease input coordinates in the form\nGPS:[Name of waypoint]:[x]:[y]:[z]:");
-                return;
-            }*/
 
             // Waypoint vevtors
             string locWayPointName, gsWayPointName;
@@ -223,6 +211,7 @@ namespace IngameScript
             double Bearing, RBearing, Deviation, Track;
             CalculateILSLocalizer(LOCWaypointVector, RWYHDG, out Bearing, out RBearing, out Deviation, out Track);
 
+            // @TODO Implement a safety feature that disables the LOC view when ship is more than perpendicular to the RWY HDG.
 
             // GlideSlope
             double GSAngle;
@@ -240,30 +229,65 @@ namespace IngameScript
                 out GSInstrumentIndicator
             );
 
+            double RunwayDesinator = Math.Round(RWYHDG / 10);
 
-
-            // LCD
-            for (int i = 0; i < MainLCDScreens.Count; i++)
+            return new ILSDataSet
             {
-                // TODO Improve printing to screens!
-                (MainLCDScreens[i] as IMyTextPanel).WriteText(
-                    "LOC Name: " + locWayPointName + "\n" +
-                    "G/S Name: " + gsWayPointName + "\n" +
-                    "RWY HDG: " + RWYHDG.ToString() + "\n" +
-                    "\n" +
-                    "Bearing: " + Math.Round(Bearing).ToString() + "\n" +
-                    "Relative Bearing: " + Math.Round(RBearing).ToString() + "\n" +
-                    "Track: " + Math.Round(Track).ToString() + "\n" +
-                    "Deviation: " + Math.Round(Deviation).ToString() + "\n" +
-                    "Angle: " + Math.Round(GSAngle).ToString() + "deg\n" +
-                    "Distance: " + Math.Round(Distance).ToString() + "\n" +
-                    LOCInstrumentString + "\n" +
-                    LOCInstrumentIndicator
-                , false);
+                Rotation = RWYHDG - Bearing,
+                LocalizerDeviation = Deviation,
+                GlideSlopeDeviation = GSAngle,
+                Distance = Distance,
+                RunwayNumber = RunwayDesinator
+            };
+        }
+
+
+        public void DrawToSurfaces(ILSDataSet ILSData)
+        {
+            List<IMyTextSurfaceProvider> SurfaceProviders = GetScreens(CockpitTag);
+            if (SurfaceProviders == null)
+            {
+                Echo("No screen found!");
+                return;
             }
 
-            // TODO Allow for multiple screens! Make a method for printing to multiple screens!
-            (GSLCDScreens[0] as IMyTextPanel).WriteText(GSInstrumentString + "\n" + GSInstrumentIndicator);
+            foreach (IMyTextSurfaceProvider _sp in SurfaceProviders)
+            {
+                IMyTextSurface Surface = _sp.GetSurface(SurfaceIndex);
+                Draw.DrawSurface(Surface, ILSData);
+            }
+        }
+
+
+        public List<IMyTextSurfaceProvider> GetScreens(string Tag)
+        {
+            List<IMyTextSurfaceProvider> TaggedSurfaceProviders = new List<IMyTextSurfaceProvider>();
+            List<IMyTextSurfaceProvider> SurfaceProviders = new List<IMyTextSurfaceProvider>();
+            GridTerminalSystem.GetBlocksOfType(SurfaceProviders);
+
+            foreach (IMyTextSurfaceProvider _sp in SurfaceProviders)
+            {
+                if ((_sp as IMyTerminalBlock).CustomName.Contains(Tag))
+                {
+                    TaggedSurfaceProviders.Add(_sp);
+                }
+            }
+
+            if (TaggedSurfaceProviders.Count == 0)
+            {
+                return null;
+            }
+
+            return TaggedSurfaceProviders;
+        }
+
+
+        public void WriteToScreens(List<IMyTerminalBlock> panels, string[] lines)
+        {
+            panels.ForEach(panel =>
+            {
+                // Call via WriteToScreens(list, new {"a", "b", "c"}))
+            });
         }
 
 
@@ -359,7 +383,7 @@ namespace IngameScript
             Echo("Listeners: " + listeners.Count.ToString());
             listeners.ForEach(listener => {
                 if (!listener.IsActive) return;
-                if (listener.Tag != antennaChannel) return;
+                if (listener.Tag != AntennaChannel) return;
                 if (listener.HasPendingMessage)
                 {
                     ActiveILSTransmitters.Add(
@@ -398,16 +422,16 @@ namespace IngameScript
 
         public void SendMessage(string message)
         {
-            IGC.SendBroadcastMessage(antennaChannel, message, TransmissionDistance.TransmissionDistanceMax);
+            IGC.SendBroadcastMessage(AntennaChannel, message, TransmissionDistance.TransmissionDistanceMax);
         }
 
 
         public void UpdateVectors()
         {
-            GravVector = cockpitBlock.GetNaturalGravity();
+            GravVector = CockpitBlock.GetNaturalGravity();
             GravVectorNorm = Vector3D.Normalize(GravVector);
 
-            ShipVector = referenceBlock.GetPosition();
+            ShipVector = ReferenceBlock.GetPosition();
             ShipVectorNorm = Vector3D.Normalize(ShipVector);
         }
 
@@ -426,19 +450,19 @@ namespace IngameScript
             LOCWaypointNorm = Vector3D.Normalize(LOCWaypointVector);
 
             // Localizer
-            RForwardVector = Vector3D.Reject(cockpitBlock.WorldMatrix.Forward, LOCWaypointNorm);
+            RForwardVector = Vector3D.Reject(CockpitBlock.WorldMatrix.Forward, LOCWaypointNorm);
             VectorNorth = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
             RVectorNorth = Vector3D.Reject(LOCWaypointNorm, GravVectorNorm);
             Bearing = Math.Acos(Vector3D.Dot(Vector3D.Normalize(RForwardVector), Vector3D.Normalize(VectorNorth))) * 180 / Math.PI;
             RBearing = Math.Acos(Vector3D.Dot(Vector3D.Normalize(RForwardVector), Vector3D.Normalize(RVectorNorth))) * 180 / Math.PI;
 
-            if (Math.Acos(Vector3D.Dot(cockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
+            if (Math.Acos(Vector3D.Dot(CockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
             {
-                LReject = Vector3D.Reject(cockpitBlock.WorldMatrix.Right, GravVectorNorm);
+                LReject = Vector3D.Reject(CockpitBlock.WorldMatrix.Right, GravVectorNorm);
             }
             else
             {
-                LReject = Vector3D.Reject(cockpitBlock.WorldMatrix.Left, GravVectorNorm);
+                LReject = Vector3D.Reject(CockpitBlock.WorldMatrix.Left, GravVectorNorm);
             }
 
             Vector3D projection = Vector3D.ProjectOnVector(ref LReject, ref LOCWaypointNorm);
