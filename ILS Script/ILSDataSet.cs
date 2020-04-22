@@ -27,7 +27,7 @@ namespace IngameScript
 
             private double _localizerDeviation;
             public double LocalizerDeviation {
-                get =>_localizerDeviation;
+                get { return _localizerDeviation; }
                 set {
                     if (value > 12)
                     {
