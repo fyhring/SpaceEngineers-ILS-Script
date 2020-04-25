@@ -23,20 +23,26 @@ namespace IngameScript
     {
         public class ILSDataSet
         {
-            public double Rotation { get; set; }
+            public double? Rotation { get; set; }
 
             private double _localizerDeviation;
             public double LocalizerDeviation {
                 get { return _localizerDeviation; }
                 set {
-                    if (value > 12)
+                    if (value > 180)
                     {
-                        _localizerDeviation = 12;
+                        value -= 360;
                     }
-                    else if (value < -12)
+
+                    if (value > LOCFullScaleDeflectionAngle)
                     {
-                        _localizerDeviation = -12;
-                    } else
+                        _localizerDeviation = LOCFullScaleDeflectionAngle;
+                    }
+                    else if (value < (LOCFullScaleDeflectionAngle * -1))
+                    {
+                        _localizerDeviation = LOCFullScaleDeflectionAngle * -1;
+                    }
+                    else
                     {
                         _localizerDeviation = value;
                     }
@@ -44,7 +50,25 @@ namespace IngameScript
                 }
             }
 
-            public double GlideSlopeDeviation { get; set; }
+            private double _glideSlopeDeviation;
+            public double GlideSlopeDeviation {
+                get { return _glideSlopeDeviation; }
+                set
+                {
+                    if (value > GSFullScaleDeflectionAngle)
+                    {
+                        _glideSlopeDeviation = GSFullScaleDeflectionAngle;
+                    }
+                    else if (value < (GSFullScaleDeflectionAngle * -1))
+                    {
+                        _glideSlopeDeviation = GSFullScaleDeflectionAngle * -1;
+                    }
+                    else
+                    {
+                        _glideSlopeDeviation = value;
+                    }
+                }
+            }
 
             public double Distance { get; set; }
 

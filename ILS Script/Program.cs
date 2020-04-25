@@ -34,9 +34,9 @@ namespace IngameScript
 
         static double LOCFullScaleDeflectionAngle = 12;
 
-        static double GSFullScaleDeflectionAngle = 12;
+        static double GSFullScaleDeflectionAngle = 6;
 
-        double GSAimAngle = 10;
+        double GSAimAngle = 8;
 
         // DO NOT EDIT ANYTHING BELOW THIS COMMENT UNLESS YOU KNOW WHAT YOU'RE DOING!
         #endregion
@@ -55,6 +55,8 @@ namespace IngameScript
 
         int SurfaceIndex = 1;
 
+        int DataSurfaceIndex = 1;
+
         IMyShipController CockpitBlock;
         IMyTerminalBlock ReferenceBlock;
         IMyRadioAntenna Antenna;
@@ -62,8 +64,6 @@ namespace IngameScript
         Vector3D ShipVector;
 
         Vector3D GravVector, GravVectorNorm, ShipVectorNorm;
-
-        List<IMyTerminalBlock> LCDScreens;
 
         ILSDataSet ILSData;
 
@@ -142,6 +142,7 @@ namespace IngameScript
                     case "disconnect":
                         ShipHasSelectedILS = false;
                         ShipShouldListen = false;
+                        Me.CustomData = "";
                         break;
                 }
             }
@@ -167,16 +168,15 @@ namespace IngameScript
                 // If ship is connected to an ILS and is listening, another ILS closer by will override
                 // the active transmitter. Normally ShipShouldListen will be false once connected.
                 SearchForILSMessages();
-                return;
             }
 
-            
+            ILSData = new ILSDataSet();
             if (ShipHasSelectedILS)
             {
                 ILSData = HandleILS();
             }
 
-            /*VORDataSet VORData;
+            /*VORDataSet VORData - new VORDataSet();
             if (ShipHasSelectedVOR)
             {
                 VORData = HandleVOR();
@@ -235,14 +235,14 @@ namespace IngameScript
             {
                 Rotation = RWYHDG - Bearing,
                 LocalizerDeviation = Deviation,
-                GlideSlopeDeviation = GSAngle,
+                GlideSlopeDeviation = GSAngle - GSAimAngle,
                 Distance = Distance,
                 RunwayNumber = RunwayDesinator
             };
         }
 
 
-        public void DrawToSurfaces(ILSDataSet ILSData)
+        public void DrawToSurfaces(ILSDataSet ILSData/*, VORData*/)
         {
             List<IMyTextSurfaceProvider> SurfaceProviders = GetScreens(CockpitTag);
             if (SurfaceProviders == null)
@@ -253,8 +253,47 @@ namespace IngameScript
 
             foreach (IMyTextSurfaceProvider _sp in SurfaceProviders)
             {
-                IMyTextSurface Surface = _sp.GetSurface(SurfaceIndex);
-                Draw.DrawSurface(Surface, ILSData);
+                IMyTerminalBlock _spTerminal = _sp as IMyTerminalBlock;
+                string _customDataString = _spTerminal.CustomData;
+                MyIni _customData = new MyIni();
+                
+                MyIniParseResult iniResult;
+                if (!_customData.TryParse(_customDataString, out iniResult))
+                {
+                    throw new Exception(iniResult.ToString());
+                }
+
+                if (_customData.Get("NavigationSurfaces", "ILS").ToInt32(-1) == -1)
+                {
+                    _customData.Set("NavigationSurfaces", "ILS", "1");
+                    _customData.Set("NavigationSurfaces", "VOR", "2");
+                    _customData.Set("NavigationSurfaces", "Data", "3");
+
+                    _spTerminal.CustomData = _customData.ToString();
+                    continue;
+                }
+
+                try
+                {
+                    IMyTextSurface ILSSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "ILS").ToInt32());
+                    Draw.DrawSurface(ILSSurface, Surface.ILS, ILSData);
+                }
+                catch (Exception)
+                {
+                    Echo("No ILS Surface found in " + _spTerminal.CustomName.ToString());
+                }
+
+                // Draw.DrawSurface(VORSurface, VORData);
+
+                try
+                {
+                    IMyTextSurface DataSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "Data").ToInt32());
+                    Draw.DrawSurface(DataSurface, Surface.Data, ILSData);
+                }
+                catch (Exception)
+                {
+                    Echo("No Data Surface found in " + _spTerminal.CustomName.ToString());
+                }
             }
         }
 
@@ -399,24 +438,55 @@ namespace IngameScript
             // Select the transmitter closest to the ship.
             ActiveILSTransmitters.ForEach(transmitter =>
             {
-                string _gsGPS = transmitter.Get("GlideSlopeData", "GPS").ToString();
-                string _gsName;
-                Vector3D _gsWaypointVector = CreateVectorFromGPSCoordinateString(_gsGPS, out _gsName);
-                double distance = Math.Round(Vector3D.Distance(_gsWaypointVector, ShipVector), 2);
+                string _GPS = transmitter.Get("TouchdownZone", "GPSA").ToString();
+                double distance = CalculateShipDistanceFromGPSString(_GPS);
+
                 if (distance < shortestDistance)
                 {
                     selectedILSTransmitter = transmitter;
                 }
             });
 
-            if (ActiveILSTransmitters.Count != 0)
+            if (ActiveILSTransmitters.Count == 0)
             {
-                Echo("Override Storage..");
-                OverrideStorage(selectedILSTransmitter);
-                ShipShouldListen = false;
-                ShipHasSelectedILS = true;
-                TriggerUpdate();
+                Echo("Not able to connect to any transmitter signals.");
+                return;
             }
+            
+
+            // Select appropriate runway from the chosen transmitter.
+            string GPSA = selectedILSTransmitter.Get("TouchdownZone", "GPSA").ToString();
+            string GPSB = selectedILSTransmitter.Get("TouchdownZone", "GPSB").ToString();
+            string HeadingA = selectedILSTransmitter.Get("Runway", "HeadingA").ToString();
+            string HeadingB = selectedILSTransmitter.Get("Runway", "HeadingB").ToString();
+
+            double TouchdownZoneADistance = CalculateShipDistanceFromGPSString(GPSA);
+            double TouchdownZoneBDistance = CalculateShipDistanceFromGPSString(GPSB);
+
+            string ActingLocalizer, ActingGlideSlope, ActiveHeading;
+            if (TouchdownZoneADistance < TouchdownZoneBDistance)
+            {
+                ActingGlideSlope = GPSA;
+                ActingLocalizer = GPSB;
+                ActiveHeading = HeadingA;
+            } else
+            {
+                ActingGlideSlope = GPSB;
+                ActingLocalizer = GPSA;
+                ActiveHeading = HeadingB;
+            }
+
+            selectedILSTransmitter.Set("LocalizerData", "RWYHDG", ActiveHeading);
+            selectedILSTransmitter.Set("LocalizerData", "GPS", ActingLocalizer);
+            selectedILSTransmitter.Set("GlideSlopeData", "GPS", ActingGlideSlope);
+
+            //
+
+            Echo("Override Storage..");
+            OverrideStorage(selectedILSTransmitter);
+
+            ShipShouldListen = false;
+            ShipHasSelectedILS = true;
         }
 
 
@@ -500,11 +570,19 @@ namespace IngameScript
 
             Angle = 90 - Math.Acos(Vector3D.Dot(GSResultantVectorNorm, GravVectorNorm)) * 180 / Math.PI;
         }
-        
+
 
         public double CalculateILSDistance(Vector3D GSWaypointVector)
         {
             return Math.Round(Vector3D.Distance(GSWaypointVector, ShipVector), 2);
+        }
+
+
+        public double CalculateShipDistanceFromGPSString(string GPS)
+        {
+            string GPSName;
+            Vector3D GPSVector = CreateVectorFromGPSCoordinateString(GPS, out GPSName);
+            return Math.Round(Vector3D.Distance(GPSVector, ShipVector));
         }
 
 
