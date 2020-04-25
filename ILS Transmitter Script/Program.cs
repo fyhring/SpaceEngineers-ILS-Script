@@ -26,6 +26,8 @@ namespace IngameScript
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
         string AntennaName = "ILS Station Antenna";
 
+        string CockpitTag = "Cockpit";
+
         string antennaChannel = "channel-ILS";
 
         // DO NOT EDIT ANYTHING BELOW THIS COMMENT UNLESS YOU KNOW WHAT YOU'RE DOING!
@@ -33,9 +35,11 @@ namespace IngameScript
 
         bool SetupComplete = false;
 
+        MyIni config = new MyIni();
+
         IMyRadioAntenna Antenna;
 
-        MyIni config = new MyIni();
+        IMyShipController CockpitBlock;
 
 
         public Program()
@@ -82,14 +86,23 @@ namespace IngameScript
 
 
             // Validate GPS strings.
-            bool IsLocalizerGPSValid  = ValidateGPSFormat(config.Get("LocalizerData", "GPS").ToString());
-            bool IsGlideslopeGPSValid = ValidateGPSFormat(config.Get("GlideSlopeData", "GPS").ToString());
+            bool IsTouchdownZoneAValid = ValidateGPSFormat(config.Get("TouchdownZone", "GPSA").ToString());
+            bool IsTouchdownZoneBValid = ValidateGPSFormat(config.Get("TouchdownZone", "GPSB").ToString());
 
-            if (!IsLocalizerGPSValid || !IsGlideslopeGPSValid)
+            if (!IsTouchdownZoneAValid || !IsTouchdownZoneBValid)
             {
                 throw new Exception("Please enter the runway data or see the guide for help.");
             }
 
+            int RunwayHDGA = config.Get("Runway", "HeadingA").ToInt16();
+            int RunwayHDGB = config.Get("Runway", "HeadingB").ToInt16();
+            if (RunwayHDGA == -1 || RunwayHDGB == -1)
+            {
+                FindCockpitBlock();
+                DetectRunwayHeadings();
+                return;
+            }
+            
 
             // Construct & send message.
             string message = config.ToString();
@@ -116,7 +129,7 @@ namespace IngameScript
 
         public bool IsDataFormatValid()
         {
-            string gps = config.Get("LocalizerData", "GPS").ToString("none");
+            string gps = config.Get("TouchdownZone", "GPSA").ToString("none");
             if (gps == "none")
             {
                 Echo("No data set, creating template in Custom Data.");
@@ -129,10 +142,133 @@ namespace IngameScript
 
         public void SetDefaultData()
         {
-            config.Set("LocalizerData", "RWYHDG", 0);
-            config.Set("LocalizerData", "GPS", "N/A");
-            config.Set("GlideSlopeData", "GPS", "N/A");
+            config.Set("Runway", "HeadingA", -1);
+            config.Set("Runway", "HeadingB", -1);
+            config.Set("TouchdownZone", "GPSA", "N/A");
+            config.Set("TouchdownZone", "GPSB", "N/A");
             Me.CustomData = config.ToString();
+        }
+
+
+        public void DetectRunwayHeadings()
+        {
+            string ZoneAString = config.Get("TouchdownZone", "GPSA").ToString();
+            string ZoneBString = config.Get("TouchdownZone", "GPSB").ToString();
+
+            string ZoneAName;
+            Vector3D ZoneA = CreateVectorFromGPSCoordinateString(ZoneAString, out ZoneAName);
+
+            string ZoneBName;
+            Vector3D ZoneB = CreateVectorFromGPSCoordinateString(ZoneBString, out ZoneBName);
+
+            Vector3D ResultA = (ZoneA * -1) + ZoneB;
+            Vector3D ResultB = ResultA * -1;
+            
+            Vector3D ResultANorm = Vector3D.Normalize(ResultA);
+            Vector3D ResultBNorm = Vector3D.Normalize(ResultB);
+
+            //
+
+            Vector3D GravVector = CockpitBlock.GetNaturalGravity();
+            Vector3D GravVectorNorm = Vector3D.Normalize(GravVector);
+            
+            Vector3D VectorNorth = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
+            // Vector3D RVectorNorth = Vector3D.Reject(LOCWaypointNorm, GravVectorNorm);
+            Vector3D VectorNorthNorm = Vector3D.Normalize(VectorNorth);
+
+            Vector3D VectorEast = Vector3D.Reject(new Vector3D(1, 0, 0), GravVectorNorm);
+            // Vector3D RVectorEast = Vector3D.Reject(..., GravVectorNorm);
+            Vector3D VectorEastNorm = Vector3D.Normalize(VectorEast);
+            
+            double DotNorthA = Vector3D.Dot(ResultANorm, VectorNorthNorm);
+            double DotNorthB = Vector3D.Dot(ResultBNorm, VectorNorthNorm);
+
+            double AngleNorthA = ToDegrees(Math.Acos(DotNorthA));
+            double AngleNorthB = ToDegrees(Math.Acos(DotNorthB));
+
+            double DotEastA = Vector3D.Dot(ResultANorm, VectorEastNorm);
+            double DotEastB = Vector3D.Dot(ResultBNorm, VectorEastNorm);
+
+            double AngleEastA = ToDegrees(Math.Acos(DotEastA));
+            double AngleEastB = ToDegrees(Math.Acos(DotEastB));
+
+            Echo("AngleNorthA: " + (AngleNorthA).ToString());
+            Echo("AngleNorthB: " + (AngleNorthB).ToString());
+            Echo("AngleEastA: " + (AngleEastA).ToString());
+            Echo("AngleEastB: " + (AngleEastB).ToString());
+
+            double HDGA = AngleNorthA;
+            if (AngleEastA > 90)
+            {
+                HDGA = 360 - AngleNorthA;
+            }
+
+            double HDGB = AngleNorthB;
+            if (AngleEastB > 90)
+            {
+                HDGB = 360 - AngleNorthB;
+            }
+
+            HDGA = Math.Round(HDGA);
+            HDGB = Math.Round(HDGB);
+
+            config.Set("Runway", "HeadingA", HDGA.ToString());
+            config.Set("Runway", "HeadingB", HDGB.ToString());
+            Me.CustomData = config.ToString();
+        }
+
+
+        public void FindCockpitBlock()
+        {
+            List<IMyTerminalBlock> cockpitListReferences = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(CockpitTag, cockpitListReferences);
+            if (cockpitListReferences.Count == 0)
+            {
+                throw new Exception("No cockpit found! Check the naming tag.");
+            }
+
+            CockpitBlock = (IMyShipController)cockpitListReferences[0];
+        }
+
+
+        public static Vector3D CreateVectorFromGPSCoordinateString(string gps, out string name)
+        {
+            string[] splitCoord = gps.Split(':');
+
+            if (splitCoord.Length < 5)
+            {
+                throw new Exception("Error: GPS coordinate " + gps + " could not be understod\nPlease input coordinates in the form\nGPS:[Name of waypoint]:[x]:[y]:[z]:");
+            }
+
+            name = splitCoord[1];
+
+            Vector3D vector = new Vector3D();
+            vector.X = StringToDouble(splitCoord[2]);
+            vector.Y = StringToDouble(splitCoord[3]);
+            vector.Z = StringToDouble(splitCoord[4]);
+
+            return vector;
+        }
+
+
+        public static double StringToDouble(string value)
+        {
+            double n;
+            bool isDouble = double.TryParse(value, out n);
+            if (isDouble)
+            {
+                return n;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+
+        public double ToDegrees(double angle)
+        {
+            return angle / Math.PI * 180;
         }
     }
 }
