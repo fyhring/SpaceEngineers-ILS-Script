@@ -68,6 +68,12 @@ namespace IngameScript
 
         public void Main(string argument, UpdateType updateSource)
         {
+            bool RecalculateRunwayHeadings = false;
+            if (argument == "recalculate")
+            {
+                RecalculateRunwayHeadings = true;
+            }
+
             if (!SetupComplete)
             {
                 Setup();
@@ -96,7 +102,7 @@ namespace IngameScript
 
             int RunwayHDGA = config.Get("Runway", "HeadingA").ToInt16();
             int RunwayHDGB = config.Get("Runway", "HeadingB").ToInt16();
-            if (RunwayHDGA == -1 || RunwayHDGB == -1)
+            if (RunwayHDGA == -1 || RunwayHDGB == -1 || RecalculateRunwayHeadings)
             {
                 FindCockpitBlock();
                 DetectRunwayHeadings();
@@ -167,44 +173,34 @@ namespace IngameScript
             Vector3D ResultANorm = Vector3D.Normalize(ResultA);
             Vector3D ResultBNorm = Vector3D.Normalize(ResultB);
 
-            //
-
             Vector3D GravVector = CockpitBlock.GetNaturalGravity();
             Vector3D GravVectorNorm = Vector3D.Normalize(GravVector);
             
             Vector3D VectorNorth = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
-            // Vector3D RVectorNorth = Vector3D.Reject(LOCWaypointNorm, GravVectorNorm);
             Vector3D VectorNorthNorm = Vector3D.Normalize(VectorNorth);
+            Vector3D VectorPerpendicular = Vector3D.Cross(VectorNorthNorm, GravVectorNorm); // Will always be west.
 
-            Vector3D VectorEast = Vector3D.Reject(new Vector3D(1, 0, 0), GravVectorNorm);
-            // Vector3D RVectorEast = Vector3D.Reject(..., GravVectorNorm);
-            Vector3D VectorEastNorm = Vector3D.Normalize(VectorEast);
-            
             double DotNorthA = Vector3D.Dot(ResultANorm, VectorNorthNorm);
             double DotNorthB = Vector3D.Dot(ResultBNorm, VectorNorthNorm);
 
             double AngleNorthA = ToDegrees(Math.Acos(DotNorthA));
             double AngleNorthB = ToDegrees(Math.Acos(DotNorthB));
 
-            double DotEastA = Vector3D.Dot(ResultANorm, VectorEastNorm);
-            double DotEastB = Vector3D.Dot(ResultBNorm, VectorEastNorm);
+            double DotEastA = Vector3D.Dot(ResultANorm, VectorPerpendicular);
+            double DotEastB = Vector3D.Dot(ResultBNorm, VectorPerpendicular);
 
             double AngleEastA = ToDegrees(Math.Acos(DotEastA));
             double AngleEastB = ToDegrees(Math.Acos(DotEastB));
 
-            Echo("AngleNorthA: " + (AngleNorthA).ToString());
-            Echo("AngleNorthB: " + (AngleNorthB).ToString());
-            Echo("AngleEastA: " + (AngleEastA).ToString());
-            Echo("AngleEastB: " + (AngleEastB).ToString());
 
             double HDGA = AngleNorthA;
-            if (AngleEastA > 90)
+            if (AngleEastA < 90)
             {
                 HDGA = 360 - AngleNorthA;
             }
 
             double HDGB = AngleNorthB;
-            if (AngleEastB > 90)
+            if (AngleEastB < 90)
             {
                 HDGB = 360 - AngleNorthB;
             }
