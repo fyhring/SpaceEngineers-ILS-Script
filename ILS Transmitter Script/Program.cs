@@ -24,7 +24,7 @@ namespace IngameScript
 
         #region mdk preserve
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
-        string AntennaName = "ILS Station Antenna";
+        string AntennaTag = "ILS Station Antenna";
 
         string CockpitTag = "Cockpit";
 
@@ -51,7 +51,7 @@ namespace IngameScript
         public void Setup()
         {
             List<IMyTerminalBlock> listReferences = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName(AntennaName, listReferences);
+            GridTerminalSystem.SearchBlocksOfName(AntennaTag, listReferences);
             Antenna = (IMyRadioAntenna)listReferences[0];
 
             if (Antenna == null)
