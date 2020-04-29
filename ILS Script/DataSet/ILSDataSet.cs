@@ -21,7 +21,7 @@ namespace IngameScript
 {
     partial class Program
     {
-        public class ILSDataSet
+        public class ILSDataSet : IDataSet
         {
             public double? Rotation { get; set; }
 
@@ -73,6 +73,14 @@ namespace IngameScript
             public double Distance { get; set; }
 
             public double RunwayNumber { get; set; }
+
+            public double RunwayHeading { get; set; }
+
+            public double Bearing { get; set; }
+
+            public double RelativeBearing { get; set; }
+
+            public double Track { get; set; }
         }
     }
 }

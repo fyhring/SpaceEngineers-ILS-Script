@@ -24,19 +24,23 @@ namespace IngameScript
         #region mdk preserve
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
 
-        double Version = 0.2;
+        // Version = 0.3
 
         string CockpitTag = "ILS Cockpit";
 
         string AntennaTag = "ILS Antenna";
 
-        string AntennaChannel = "channel-ILS";
+        string ILSAntennaChannel = "channel-ILS";
+
+        string VORAntennaChannel = "channel-VOR";
 
         static double LOCFullScaleDeflectionAngle = 12;
 
         static double GSFullScaleDeflectionAngle = 6;
 
         double GSAimAngle = 8;
+
+        static double VORFullScaleDeflectionAngle = 12;
 
         // DO NOT EDIT ANYTHING BELOW THIS COMMENT UNLESS YOU KNOW WHAT YOU'RE DOING!
         #endregion
@@ -49,13 +53,13 @@ namespace IngameScript
 
         bool SetupComplete = false;
 
-        bool ShipShouldListen = true;
+        bool ShipShouldListenForILS = true;
 
         bool ShipHasSelectedILS = false;
 
-        int SurfaceIndex = 1;
+        bool ShipShouldListenForVOR = true;
 
-        int DataSurfaceIndex = 1;
+        bool ShipHasSelectedVOR = false;
 
         IMyShipController CockpitBlock;
         IMyTerminalBlock ReferenceBlock;
@@ -70,7 +74,7 @@ namespace IngameScript
 
         public Program()
         {
-            Runtime.UpdateFrequency = UpdateFrequency.Once | UpdateFrequency.Update10;
+            Runtime.UpdateFrequency = UpdateFrequency.Once | UpdateFrequency.Update1;
         }
 
 
@@ -97,7 +101,8 @@ namespace IngameScript
             }
 
             Antenna = (IMyRadioAntenna)antennaListReferences[0];
-            IGC.RegisterBroadcastListener(AntennaChannel);
+            IGC.RegisterBroadcastListener(ILSAntennaChannel);
+            IGC.RegisterBroadcastListener(VORAntennaChannel);
 
 
             // Mark setup as completed.
@@ -130,19 +135,35 @@ namespace IngameScript
             {
                 switch (argument.ToLower())
                 {
-                    case "update":
+                    // General Commands
+                    case "reset":
                         InitializeStorage();
                         break;
-                    case "listen":
-                        ShipShouldListen = true;
+
+                    // ILS Commands
+                    case "startils":
+                        ShipShouldListenForILS = true;
                         break;
-                    case "stoplistening":
-                        ShipShouldListen = false;
+                    case "stopsearchils":
+                        ShipShouldListenForILS = false;
                         break;
-                    case "disconnect":
+                    case "stopils":
                         ShipHasSelectedILS = false;
-                        ShipShouldListen = false;
-                        Me.CustomData = "";
+                        ShipShouldListenForILS = false;
+                        // ResetDefaultILSInConfig();
+                        break;
+
+                    // VOR Commands
+                    case "startvor":
+                        ShipShouldListenForVOR = true;
+                        break;
+                    case "stopsearchvor":
+                        ShipShouldListenForVOR = false;
+                        break;
+                    case "stopvor":
+                        ShipHasSelectedVOR = false;
+                        ShipShouldListenForVOR = false;
+                        // ResetDefaultVORInConfig();
                         break;
                 }
             }
@@ -152,22 +173,16 @@ namespace IngameScript
 
 
             // Main Logic
-            if (!ShipHasSelectedILS)
-            {
-                Echo("Not connected");
-            }
-            else
-            {
-                Echo("Is connected!");
-            }
-
-            Echo("ShipShouldListen: " + ShipShouldListen.ToString());
-
-            if (ShipShouldListen)
+            if (ShipShouldListenForILS)
             {
                 // If ship is connected to an ILS and is listening, another ILS closer by will override
                 // the active transmitter. Normally ShipShouldListen will be false once connected.
                 SearchForILSMessages();
+            }
+
+            if (ShipShouldListenForVOR)
+            {
+                SearchForVORMessages();
             }
 
             ILSData = new ILSDataSet();
@@ -176,13 +191,13 @@ namespace IngameScript
                 ILSData = HandleILS();
             }
 
-            /*VORDataSet VORData - new VORDataSet();
+            VORDataSet VORData = new VORDataSet();
             if (ShipHasSelectedVOR)
             {
                 VORData = HandleVOR();
-            }*/
+            }
 
-            DrawToSurfaces(ILSData);
+            DrawToSurfaces(ILSData, VORData);
         }
 
 
@@ -205,7 +220,7 @@ namespace IngameScript
             Vector3D GSWaypointVector = CreateVectorFromGPSCoordinateString(GSGPS, out gsWayPointName);
 
             // Slant range distance
-            double Distance = CalculateILSDistance(GSWaypointVector);
+            double Distance = CalculateShipDistanceFromVector(GSWaypointVector);
 
             // Localizer
             double Bearing, RBearing, Deviation, Track;
@@ -219,7 +234,7 @@ namespace IngameScript
 
 
             // LOC & G/S Instruments
-            string LOCInstrumentString, LOCInstrumentIndicator, GSInstrumentString, GSInstrumentIndicator;
+            /*string LOCInstrumentString, LOCInstrumentIndicator, GSInstrumentString, GSInstrumentIndicator;
             BuildLocalizerAndGlideSlopeIndications(
                 Deviation,
                 GSAngle,
@@ -227,7 +242,7 @@ namespace IngameScript
                 out LOCInstrumentIndicator,
                 out GSInstrumentString,
                 out GSInstrumentIndicator
-            );
+            );*/
 
             double RunwayDesinator = Math.Round(RWYHDG / 10);
 
@@ -237,12 +252,87 @@ namespace IngameScript
                 LocalizerDeviation = Deviation,
                 GlideSlopeDeviation = GSAngle - GSAimAngle,
                 Distance = Distance,
-                RunwayNumber = RunwayDesinator
+                RunwayNumber = RunwayDesinator,
+                RunwayHeading = RWYHDG,
+                Bearing = Bearing,
+                RelativeBearing = RBearing,
+                Track = Track
             };
         }
 
 
-        public void DrawToSurfaces(ILSDataSet ILSData/*, VORData*/)
+        public VORDataSet HandleVOR()
+        {
+            string VORName = config.Get("VORStation", "Name").ToString();
+            Vector3D VORPosition = CreateVectorFromGPSCoordinateString(config.Get("VORStation", "Position").ToString());
+            Vector3D NorthVector = CreateVectorFromGPSCoordinateString(config.Get("VORStation", "NorthVector").ToString());
+            Vector3D CrossVector = CreateVectorFromGPSCoordinateString(config.Get("VORStation", "CrossVector").ToString());
+
+            VORDataSet VORData = new VORDataSet();
+            VORData.Name = VORName;
+
+
+            Vector3D RadialVector = Vector3D.Negate(VORPosition) + ShipVector;
+            Vector3D RRadialVector = Vector3D.Reject(RadialVector, GravVectorNorm);
+            Vector3D RadialVectorNorm = Vector3D.Normalize(RRadialVector);
+
+            double NorthAngle = ToDegrees(Math.Acos(Vector3D.Dot(RadialVectorNorm, NorthVector)));
+            double CrossAngle = ToDegrees(Math.Acos(Vector3D.Dot(RadialVectorNorm, CrossVector)));
+            
+            double Radial = NorthAngle;
+            if (CrossAngle < 90)
+            {
+                Radial = 360 - NorthAngle;
+            }
+
+            Echo("Radial: " + Radial);
+            VORData.Radial = Radial;
+
+            double OBS = config.Get("VORNavigation", "OBS").ToDouble();
+
+            Vector3D Direction = Vector3D.Reject(Vector3D.Normalize(CockpitBlock.WorldMatrix.Forward), GravVectorNorm);
+            double RelativeOBS = ToDegrees(Math.Acos(Vector3D.Dot(Direction, RadialVectorNorm)));
+
+            Vector3D CrossDirection;
+            if (Math.Acos(Vector3D.Dot(CockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
+            {
+                CrossDirection = Vector3D.Reject(CockpitBlock.WorldMatrix.Right, GravVectorNorm);
+            }
+            else
+            {
+                CrossDirection = Vector3D.Reject(CockpitBlock.WorldMatrix.Left, GravVectorNorm);
+            }
+
+            double AngleCross = ToDegrees(Math.Acos(Vector3D.Dot(CrossDirection, RadialVectorNorm)));
+
+            double Rotation = RelativeOBS;
+            if (AngleCross > 90)
+            {
+                Rotation = 360 - RelativeOBS;
+            }
+
+            if (Rotation > 180)
+            {
+                VORData.Rotation = Rotation - 180;
+            } else
+            {
+                VORData.Rotation = Rotation + 180;
+            }
+
+            Echo("AngleCross: " + AngleCross.ToString());
+            Echo("Rotation: " + VORData.Rotation.ToString());
+
+            VORData.Distance = CalculateShipDistanceFromVector(VORPosition);
+            VORData.OBS = OBS;
+            VORData.RelativeOBS = RelativeOBS;
+
+            VORData.Deviation = 6; // TODO - Calculate this
+
+            return VORData;
+        }
+
+
+        public void DrawToSurfaces(ILSDataSet ILSData, VORDataSet VORData)
         {
             List<IMyTextSurfaceProvider> SurfaceProviders = GetScreens(CockpitTag);
             if (SurfaceProviders == null)
@@ -250,6 +340,12 @@ namespace IngameScript
                 Echo("No screen found!");
                 return;
             }
+
+            CombinedDataSet CombinedData = new CombinedDataSet
+            {
+                ILSData = ILSData,
+                VORData = VORData
+            };
 
             foreach (IMyTextSurfaceProvider _sp in SurfaceProviders)
             {
@@ -273,22 +369,37 @@ namespace IngameScript
                     continue;
                 }
 
+                // ILS Screen
                 try
                 {
                     IMyTextSurface ILSSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "ILS").ToInt32());
                     Draw.DrawSurface(ILSSurface, Surface.ILS, ILSData);
                 }
-                catch (Exception)
+                catch (Exception Ex)
                 {
-                    Echo("No ILS Surface found in " + _spTerminal.CustomName.ToString());
+                    Echo("No ILS Surface found in \"" + _spTerminal.CustomName.ToString() + "\".");
+                    Echo(Ex.ToString());
                 }
 
-                // Draw.DrawSurface(VORSurface, VORData);
 
+                // VOR Screen
+                try
+                {
+                    IMyTextSurface VORSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "VOR").ToInt32());
+                    Draw.DrawSurface(VORSurface, Surface.VOR, VORData);
+                }
+                catch (Exception Ex)
+                {
+                    Echo("No VOR Surface found in \"" + _spTerminal.CustomName.ToString() + "\".");
+                    Echo(Ex.ToString());
+                }
+
+
+                // Data Screen
                 try
                 {
                     IMyTextSurface DataSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "Data").ToInt32());
-                    Draw.DrawSurface(DataSurface, Surface.Data, ILSData);
+                    Draw.DrawSurface(DataSurface, Surface.Data, CombinedData);
                 }
                 catch (Exception)
                 {
@@ -387,7 +498,7 @@ namespace IngameScript
         }
 
 
-        public MyIni ParseBroadcastedILSMessage(MyIGCMessage message)
+        public MyIni ParseBroadcastedMessage(MyIGCMessage message)
         {
             long sender = message.Source;
 
@@ -419,14 +530,14 @@ namespace IngameScript
             IGC.GetBroadcastListeners(listeners);
 
             // Parse any messages from active listeners on the selected channel.
-            Echo("Listeners: " + listeners.Count.ToString());
+            Echo("ILS Listeners: " + listeners.Count.ToString());
             listeners.ForEach(listener => {
                 if (!listener.IsActive) return;
-                if (listener.Tag != AntennaChannel) return;
+                if (listener.Tag != ILSAntennaChannel) return;
                 if (listener.HasPendingMessage)
                 {
                     ActiveILSTransmitters.Add(
-                        ParseBroadcastedILSMessage(listener.AcceptMessage())
+                        ParseBroadcastedMessage(listener.AcceptMessage())
                     );
                 }
             });
@@ -434,7 +545,7 @@ namespace IngameScript
             double shortestDistance = 99999;
             MyIni selectedILSTransmitter = new MyIni();
 
-            Echo("Transmitters: " + ActiveILSTransmitters.Count.ToString());
+            Echo("ILS Transmitters: " + ActiveILSTransmitters.Count.ToString());
             // Select the transmitter closest to the ship.
             ActiveILSTransmitters.ForEach(transmitter =>
             {
@@ -449,7 +560,7 @@ namespace IngameScript
 
             if (ActiveILSTransmitters.Count == 0)
             {
-                Echo("Not able to connect to any transmitter signals.");
+                Echo("Not able to connect to any ILS transmitter signals.");
                 return;
             }
             
@@ -476,23 +587,90 @@ namespace IngameScript
                 ActiveHeading = HeadingB;
             }
 
-            selectedILSTransmitter.Set("LocalizerData", "RWYHDG", ActiveHeading);
-            selectedILSTransmitter.Set("LocalizerData", "GPS", ActingLocalizer);
-            selectedILSTransmitter.Set("GlideSlopeData", "GPS", ActingGlideSlope);
+            config.Set("TouchdownZone", "GPSA", GPSA);
+            config.Set("TouchdownZone", "GPSB", GPSB);
+            config.Set("Runway", "HeadingA", HeadingA);
+            config.Set("Runway", "HeadingB", HeadingB);
 
-            //
+            config.Set("LocalizerData", "RWYHDG", ActiveHeading);
+            config.Set("LocalizerData", "GPS", ActingLocalizer);
+            config.Set("GlideSlopeData", "GPS", ActingGlideSlope);
 
-            Echo("Override Storage..");
-            OverrideStorage(selectedILSTransmitter);
+            Echo("Save Storage..");
+            // OverrideStorage(selectedILSTransmitter);
+            SaveStorage();
 
-            ShipShouldListen = false;
+
+            ShipShouldListenForILS = false;
             ShipHasSelectedILS = true;
+        }
+
+
+        public void SearchForVORMessages()
+        {
+            List<MyIni> ActiveVORTransmitters = new List<MyIni>();
+            List<IMyBroadcastListener> listeners = new List<IMyBroadcastListener>();
+            IGC.GetBroadcastListeners(listeners);
+
+            // Parse any messages from active listeners on the selected channel.
+            Echo("VOR Listeners: " + listeners.Count.ToString());
+            listeners.ForEach(listener => {
+                if (!listener.IsActive) return;
+                if (listener.Tag != VORAntennaChannel) return;
+                if (listener.HasPendingMessage)
+                {
+                    ActiveVORTransmitters.Add(
+                        ParseBroadcastedMessage(listener.AcceptMessage())
+                    );
+                }
+            });
+
+            double shortestDistance = 99999;
+            MyIni selectedVORTransmitter = new MyIni();
+
+            Echo("VOR Transmitters: " + ActiveVORTransmitters.Count.ToString());
+            // Select the transmitter closest to the ship.
+            ActiveVORTransmitters.ForEach(transmitter =>
+            {
+                string _GPS = transmitter.Get("Station", "Position").ToString();
+                double distance = CalculateShipDistanceFromGPSString(_GPS);
+
+                if (distance < shortestDistance)
+                {
+                    selectedVORTransmitter = transmitter;
+                }
+            });
+
+            if (ActiveVORTransmitters.Count == 0)
+            {
+                Echo("Not able to connect to any VOR transmitter signals.");
+                return;
+            }
+
+            string Name = selectedVORTransmitter.Get("Station", "Name").ToString();
+            string Position = selectedVORTransmitter.Get("Station", "Position").ToString();
+            string NorthVector = selectedVORTransmitter.Get("Station", "NorthVector").ToString();
+            string CrossVector = selectedVORTransmitter.Get("Station", "CrossVector").ToString();
+
+            Echo("Connected to VOR: " + Name);
+
+            config.Set("VORStation", "Name", Name);
+            config.Set("VORStation", "Position", Position);
+            config.Set("VORStation", "NorthVector", NorthVector);
+            config.Set("VORStation", "CrossVector", CrossVector);
+
+            config.Set("VORNavigation", "OBS", 360);
+
+            SaveStorage();
+
+            ShipHasSelectedVOR = true;
+            ShipShouldListenForVOR = false;
         }
 
 
         public void SendMessage(string message)
         {
-            IGC.SendBroadcastMessage(AntennaChannel, message, TransmissionDistance.TransmissionDistanceMax);
+            IGC.SendBroadcastMessage(ILSAntennaChannel, message, TransmissionDistance.TransmissionDistanceMax);
         }
 
 
@@ -572,7 +750,7 @@ namespace IngameScript
         }
 
 
-        public double CalculateILSDistance(Vector3D GSWaypointVector)
+        public double CalculateShipDistanceFromVector(Vector3D GSWaypointVector)
         {
             return Math.Round(Vector3D.Distance(GSWaypointVector, ShipVector), 2);
         }
@@ -624,18 +802,15 @@ namespace IngameScript
         }
 
 
-        public void OverrideStorage(MyIni config)
+        public void SaveStorage()
         {
-            if (useCustomData == true)
+            if (useCustomData)
             {
                 Me.CustomData = config.ToString();
-            }
-            else
+            } else
             {
                 Storage = config.ToString();
             }
-
-            InitializeStorage();
         }
 
 
@@ -659,6 +834,13 @@ namespace IngameScript
         }
 
 
+        public static Vector3D CreateVectorFromGPSCoordinateString(string gps)
+        {
+            string dump;
+            return CreateVectorFromGPSCoordinateString(gps, out dump);
+        }
+
+
         public static double StringToDouble(string value)
         {
             double n;
@@ -671,6 +853,12 @@ namespace IngameScript
             {
                 return 0;
             }
+        }
+
+
+        public double ToDegrees(double angle)
+        {
+            return angle / Math.PI * 180;
         }
 
     }

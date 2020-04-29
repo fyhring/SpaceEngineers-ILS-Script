@@ -53,8 +53,11 @@
   <Import Project="MDK/MDK.options.props" />
   <Import Project="MDK/MDK.paths.props" Condition="exists('MDK/MDK.paths.props')" />
   <ItemGroup>
+    <Compile Include="DataSet\CombinedDataSet.cs" />
+    <Compile Include="DataSet\IDataSet.cs" />
+    <Compile Include="DataSet\VORDataSet.cs" />
     <Compile Include="Draw.cs" />
-    <Compile Include="ILSDataSet.cs" />
+    <Compile Include="DataSet\ILSDataSet.cs" />
     <Compile Include="MDK\Bootstrapper.cs" />
     <AdditionalFiles Include="MDK\MDK.options.props">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
