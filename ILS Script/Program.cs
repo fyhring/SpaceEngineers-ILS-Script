@@ -40,7 +40,7 @@ namespace IngameScript
 
         double GSAimAngle = 8;
 
-        static double VORFullScaleDeflectionAngle = 12;
+        static double VORFullScaleDeflectionAngle = 24;
 
         // DO NOT EDIT ANYTHING BELOW THIS COMMENT UNLESS YOU KNOW WHAT YOU'RE DOING!
         #endregion
@@ -123,14 +123,6 @@ namespace IngameScript
                 Echo("Skipping setup");
             }
 
-
-            /*
-                User Commands:
-                - Update
-                - Listen (even while connected to an ILS)
-                - StopListening
-                - Disconnect (also runs StopListening)
-            */
             if (!argument.Equals(""))
             {
                 switch (argument.ToLower())
@@ -165,6 +157,29 @@ namespace IngameScript
                         ShipShouldListenForVOR = false;
                         // ResetDefaultVORInConfig();
                         break;
+                }
+                // OBS 90
+                if (argument.ToLower().StartsWith("obs "))
+                {
+                    string[] argPart = argument.Split(' ');
+                    double OBS;
+                    if (double.TryParse(argPart[1], out OBS))
+                    {
+                        config.Set("VORNavigation", "OBS", OBS.ToString());
+                        SaveStorage();
+                    }
+                }
+
+                // SurfaceToggle 0 1
+                if (argument.ToLower().StartsWith("surfacetoggle "))
+                {
+                    string[] argPart = argument.Split(' ');
+                    int SurfaceProviderIndex, SurfaceIndex;
+
+                    int.TryParse(argPart[1], out SurfaceProviderIndex);
+                    int.TryParse(argPart[2], out SurfaceIndex);
+
+                    ToggleSurface(SurfaceProviderIndex, SurfaceIndex);
                 }
             }
 
@@ -207,7 +222,6 @@ namespace IngameScript
             // Custom Data
             string LOCGPS, GSGPS;
             double RWYHDG;
-            Echo("Getting data");
 
             LOCGPS = config.Get("LocalizerData", "GPS").ToString();
             GSGPS = config.Get("GlideSlopeData", "GPS").ToString();
@@ -284,14 +298,28 @@ namespace IngameScript
             {
                 Radial = 360 - NorthAngle;
             }
-
-            Echo("Radial: " + Radial);
+            
             VORData.Radial = Radial;
 
             double OBS = config.Get("VORNavigation", "OBS").ToDouble();
 
-            Vector3D Direction = Vector3D.Reject(Vector3D.Normalize(CockpitBlock.WorldMatrix.Forward), GravVectorNorm);
-            double RelativeOBS = ToDegrees(Math.Acos(Vector3D.Dot(Direction, RadialVectorNorm)));
+            // Aircraft North Vector
+            Vector3D ACNorthVector = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
+            Vector3D ACNorthVectorNorm = Vector3D.Normalize(ACNorthVector);
+
+            Vector3D ConvVORNorthVector = Vector3D.Normalize(Vector3D.Reject(NorthVector, GravVectorNorm));
+            Vector3D ConvVORCrossVector = Vector3D.Normalize(Vector3D.Reject(CrossVector, GravVectorNorm));
+
+            double Convergence = ToDegrees(Math.Acos(Vector3D.Dot(ACNorthVectorNorm, ConvVORNorthVector)));
+            double ConvergenceCross = ToDegrees(Math.Acos(Vector3D.Dot(ACNorthVectorNorm, ConvVORCrossVector)));
+            
+            if (ConvergenceCross < 90)
+            {
+                Convergence = Convergence * -1;
+            }
+
+            Vector3D Direction = Vector3D.Normalize(Vector3D.Reject(Vector3D.Normalize(CockpitBlock.WorldMatrix.Forward), GravVectorNorm));
+            double Heading = ToDegrees(Math.Acos(Vector3D.Dot(Direction, ACNorthVectorNorm)));
 
             Vector3D CrossDirection;
             if (Math.Acos(Vector3D.Dot(CockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
@@ -303,30 +331,35 @@ namespace IngameScript
                 CrossDirection = Vector3D.Reject(CockpitBlock.WorldMatrix.Left, GravVectorNorm);
             }
 
-            double AngleCross = ToDegrees(Math.Acos(Vector3D.Dot(CrossDirection, RadialVectorNorm)));
-
-            double Rotation = RelativeOBS;
-            if (AngleCross > 90)
+            double AngleCross = ToDegrees(Math.Acos(Vector3D.Dot(CrossDirection, ACNorthVectorNorm)));
+            if (AngleCross < 90)
             {
-                Rotation = 360 - RelativeOBS;
+                Heading = 360 - Heading;
             }
 
-            if (Rotation > 180)
+            double Rotation = OBS - Heading - Convergence - 180;
+            
+
+            // Deviation
+            double Deviation = Radial - OBS;
+            Deviation *= -1;
+            if (Deviation > 90)
             {
-                VORData.Rotation = Rotation - 180;
-            } else
+                Deviation -= 180;
+                Rotation -= 180;
+            }
+            else if (Deviation < -90)
             {
-                VORData.Rotation = Rotation + 180;
+                Deviation += 180;
+                Rotation -= 180;
             }
 
-            Echo("AngleCross: " + AngleCross.ToString());
-            Echo("Rotation: " + VORData.Rotation.ToString());
 
+            VORData.Rotation = Rotation;
             VORData.Distance = CalculateShipDistanceFromVector(VORPosition);
             VORData.OBS = OBS;
-            VORData.RelativeOBS = RelativeOBS;
-
-            VORData.Deviation = 6; // TODO - Calculate this
+            VORData.Heading = Heading;
+            VORData.Deviation = Deviation;
 
             return VORData;
         }
@@ -359,46 +392,73 @@ namespace IngameScript
                     throw new Exception(iniResult.ToString());
                 }
 
-                if (_customData.Get("NavigationSurfaces", "ILS").ToInt32(-1) == -1)
+
+                if (_customData.Get("NavigationSurfaces", "0").ToString("none") == "none")
                 {
-                    _customData.Set("NavigationSurfaces", "ILS", "1");
-                    _customData.Set("NavigationSurfaces", "VOR", "2");
-                    _customData.Set("NavigationSurfaces", "Data", "3");
+                    for (int i = 0; i < _sp.SurfaceCount; i++)
+                    {
+                        switch(i) {
+                            case 1:
+                                _customData.Set("NavigationSurfaces", i.ToString(), "ILS");
+                                break;
+                            case 2:
+                                _customData.Set("NavigationSurfaces", i.ToString(), "VOR");
+                                break;
+                            case 3:
+                                _customData.Set("NavigationSurfaces", i.ToString(), "Data");
+                                break;
+                            default:
+                                _customData.Set("NavigationSurfaces", i.ToString(), "N/A");
+                                break;
+                        }
+                    }
 
                     _spTerminal.CustomData = _customData.ToString();
                     continue;
                 }
 
+                string[] DrawSurfaces = new string[_sp.SurfaceCount];
+                try
+                {
+                    for (var i = 0; i < _sp.SurfaceCount; i++)
+                    {
+                        string value = _customData.Get("NavigationSurfaces", i.ToString()).ToString();
+                        DrawSurfaces[i] = value;
+                    }
+                }
+                catch (Exception)
+                {
+                    Echo("Error in building DrawSurfaces Loop");
+                }
+
                 // ILS Screen
                 try
                 {
-                    IMyTextSurface ILSSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "ILS").ToInt32());
+                    IMyTextSurface ILSSurface = _sp.GetSurface(Array.IndexOf(DrawSurfaces, "ILS"));
                     Draw.DrawSurface(ILSSurface, Surface.ILS, ILSData);
                 }
                 catch (Exception Ex)
                 {
                     Echo("No ILS Surface found in \"" + _spTerminal.CustomName.ToString() + "\".");
-                    Echo(Ex.ToString());
                 }
 
 
                 // VOR Screen
                 try
                 {
-                    IMyTextSurface VORSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "VOR").ToInt32());
+                    IMyTextSurface VORSurface = _sp.GetSurface(Array.IndexOf(DrawSurfaces, "VOR"));
                     Draw.DrawSurface(VORSurface, Surface.VOR, VORData);
                 }
                 catch (Exception Ex)
                 {
                     Echo("No VOR Surface found in \"" + _spTerminal.CustomName.ToString() + "\".");
-                    Echo(Ex.ToString());
                 }
 
 
                 // Data Screen
                 try
                 {
-                    IMyTextSurface DataSurface = _sp.GetSurface(_customData.Get("NavigationSurfaces", "Data").ToInt32());
+                    IMyTextSurface DataSurface = _sp.GetSurface(Array.IndexOf(DrawSurfaces, "Data"));
                     Draw.DrawSurface(DataSurface, Surface.Data, CombinedData);
                 }
                 catch (Exception)
@@ -411,13 +471,13 @@ namespace IngameScript
 
         public List<IMyTextSurfaceProvider> GetScreens(string Tag)
         {
-            List<IMyTextSurfaceProvider> TaggedSurfaceProviders = new List<IMyTextSurfaceProvider>();
+            List<IMyTerminalBlock> TaggedSurfaceProviders = new List<IMyTerminalBlock>();
             List<IMyTextSurfaceProvider> SurfaceProviders = new List<IMyTextSurfaceProvider>();
             GridTerminalSystem.GetBlocksOfType(SurfaceProviders);
 
-            foreach (IMyTextSurfaceProvider _sp in SurfaceProviders)
+            foreach (IMyTerminalBlock _sp in SurfaceProviders)
             {
-                if ((_sp as IMyTerminalBlock).CustomName.Contains(Tag))
+                if (_sp.CustomName.Contains(Tag))
                 {
                     TaggedSurfaceProviders.Add(_sp);
                 }
@@ -428,9 +488,122 @@ namespace IngameScript
                 return null;
             }
 
-            return TaggedSurfaceProviders;
+            TaggedSurfaceProviders.Sort((x, y) => string.Compare(x.CustomName, y.CustomName));
+            List<IMyTextSurfaceProvider> SortedSurfaceProviders = TaggedSurfaceProviders.ConvertAll(x => (IMyTextSurfaceProvider)x);
+
+            return SortedSurfaceProviders;
         }
 
+
+        public void ToggleSurface(int SurfaceProviderIndex, int SurfaceIndex)
+        {
+            List<IMyTextSurfaceProvider> SurfaceProviders = GetScreens(CockpitTag);
+            if (SurfaceProviders == null)
+            {
+                return;
+            }
+
+            IMyTextSurfaceProvider SurfaceProvider;
+            try
+            {
+                 SurfaceProvider = SurfaceProviders[SurfaceProviderIndex];
+            }
+            catch (Exception)
+            {
+                Echo("Surface provider \"" + SurfaceProviderIndex.ToString() + "\" was not found!");
+                return;
+            }
+
+            IMyTerminalBlock SurfaceProviderTerminal = SurfaceProvider as IMyTerminalBlock;
+            string _customDataString = SurfaceProviderTerminal.CustomData;
+            MyIni _customData = new MyIni();
+
+            MyIniParseResult iniResult;
+            if (!_customData.TryParse(_customDataString, out iniResult))
+            {
+                throw new Exception(iniResult.ToString());
+            }
+
+            string[] DrawSurfaces = new string[SurfaceProvider.SurfaceCount];
+            try
+            {
+                for (var i = 0; i < SurfaceProvider.SurfaceCount; i++)
+                {
+                    string value = _customData.Get("NavigationSurfaces", i.ToString()).ToString();
+                    DrawSurfaces[i] = value;
+                }
+            }
+            catch (Exception)
+            {
+                Echo("Error in building DrawSurfaces Loop");
+            }
+
+            string[] DisplayServices = { "ILS", "VOR", "Data", "N/A" };
+
+            string CurrentValue;
+            try
+            {
+                CurrentValue = DrawSurfaces[SurfaceIndex];
+            }
+            catch (Exception)
+            {
+                Echo("Surface does not exists in the surface provider."); // TODO Add index values to output!
+                return;
+            }
+
+            int CurrentValueServiceIndex;
+            try
+            {
+                CurrentValueServiceIndex = Array.IndexOf(DisplayServices, CurrentValue);
+            }
+            catch (Exception)
+            {
+                Echo("\"" + CurrentValue + "\" is not a valid value for a surface!");
+                return;
+            }
+
+            int NextServiceIndex = CurrentValueServiceIndex + 1;
+            if (NextServiceIndex >= DisplayServices.Count())
+            {
+                NextServiceIndex = 0;
+            }
+
+            string NextService = DisplayServices[NextServiceIndex];
+
+            // Reset the two values after the recursive check.
+            NextServiceIndex = RecursiveServiceDetermination(DisplayServices, DrawSurfaces, NextServiceIndex, NextService);
+            NextService = DisplayServices[NextServiceIndex];
+
+            Echo("Next Service: " + NextService);
+
+            _customData.Set("NavigationSurfaces", SurfaceIndex.ToString(), NextService);
+            SurfaceProviderTerminal.CustomData = _customData.ToString();
+
+            if (NextService == "N/A")
+            {
+                IMyTextSurface TextSurface = SurfaceProvider.GetSurface(SurfaceIndex);
+                Draw.ResetSurface(TextSurface);
+            }
+        }
+
+
+        private int RecursiveServiceDetermination(string[] DisplayServices, string[] DrawSurfaces, int NextServiceIndex, string NextService)
+        {
+            if (Array.IndexOf(DrawSurfaces, NextService) >= 0 && NextService != "N/A")
+            {
+                NextServiceIndex++;
+                if (NextServiceIndex >= DisplayServices.Count())
+                {
+                    NextServiceIndex = 0;
+                }
+                NextService = DisplayServices[NextServiceIndex];
+
+                return RecursiveServiceDetermination(DisplayServices, DrawSurfaces, NextServiceIndex, NextService);
+            } else
+            {
+                return NextServiceIndex;
+            }
+        }
 
         public void WriteToScreens(List<IMyTerminalBlock> panels, string[] lines)
         {
@@ -503,7 +676,6 @@ namespace IngameScript
             long sender = message.Source;
 
             Echo("Message received with tag" + message.Tag + "\n\r");
-            Echo("from address " + sender.ToString() + ": \n\r");
 
             MyIni iniMessage = new MyIni();
             MyIniParseResult iniResult;
@@ -517,12 +689,6 @@ namespace IngameScript
         }
 
 
-        public void TriggerUpdate()
-        {
-            Echo("Trigger update..");
-        }
-
-
         public void SearchForILSMessages()
         {
             List<MyIni> ActiveILSTransmitters = new List<MyIni>();
@@ -530,7 +696,6 @@ namespace IngameScript
             IGC.GetBroadcastListeners(listeners);
 
             // Parse any messages from active listeners on the selected channel.
-            Echo("ILS Listeners: " + listeners.Count.ToString());
             listeners.ForEach(listener => {
                 if (!listener.IsActive) return;
                 if (listener.Tag != ILSAntennaChannel) return;
@@ -544,8 +709,7 @@ namespace IngameScript
 
             double shortestDistance = 99999;
             MyIni selectedILSTransmitter = new MyIni();
-
-            Echo("ILS Transmitters: " + ActiveILSTransmitters.Count.ToString());
+            
             // Select the transmitter closest to the ship.
             ActiveILSTransmitters.ForEach(transmitter =>
             {
@@ -595,9 +759,7 @@ namespace IngameScript
             config.Set("LocalizerData", "RWYHDG", ActiveHeading);
             config.Set("LocalizerData", "GPS", ActingLocalizer);
             config.Set("GlideSlopeData", "GPS", ActingGlideSlope);
-
-            Echo("Save Storage..");
-            // OverrideStorage(selectedILSTransmitter);
+            
             SaveStorage();
 
 
@@ -613,7 +775,6 @@ namespace IngameScript
             IGC.GetBroadcastListeners(listeners);
 
             // Parse any messages from active listeners on the selected channel.
-            Echo("VOR Listeners: " + listeners.Count.ToString());
             listeners.ForEach(listener => {
                 if (!listener.IsActive) return;
                 if (listener.Tag != VORAntennaChannel) return;
@@ -627,8 +788,7 @@ namespace IngameScript
 
             double shortestDistance = 99999;
             MyIni selectedVORTransmitter = new MyIni();
-
-            Echo("VOR Transmitters: " + ActiveVORTransmitters.Count.ToString());
+            
             // Select the transmitter closest to the ship.
             ActiveVORTransmitters.ForEach(transmitter =>
             {
@@ -659,7 +819,7 @@ namespace IngameScript
             config.Set("VORStation", "NorthVector", NorthVector);
             config.Set("VORStation", "CrossVector", CrossVector);
 
-            config.Set("VORNavigation", "OBS", 360);
+            config.Set("VORNavigation", "OBS", config.Get("VORNavigation", "OBS").ToDouble(360));
 
             SaveStorage();
 
@@ -797,8 +957,7 @@ namespace IngameScript
                     Storage = config.ToString();
                 }
             }
-
-            Echo("Storage setup complete.");
+            
         }
 
 

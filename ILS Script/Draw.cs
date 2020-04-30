@@ -83,12 +83,26 @@ namespace IngameScript
             }
 
 
-            private static void PrepareTextSurfaceForSprites(IMyTextSurface textSurface)
+            private static void PrepareTextSurfaceForSprites(IMyTextSurface TextSurface)
             {
                 // Set the sprite display mode
-                textSurface.ContentType = ContentType.SCRIPT;
+                TextSurface.ContentType = ContentType.SCRIPT;
                 // Make sure no built-in script has been selected
-                textSurface.Script = "";
+                TextSurface.Script = "";
+            }
+
+
+            public static void ResetSurface(IMyTextSurface TextSurface)
+            {
+                var Frame = TextSurface.DrawFrame();
+                Size = new Vector2(DrawingSurface.SurfaceSize.Y, DrawingSurface.SurfaceSize.Y);
+                Center = new Vector2(DrawingSurface.TextureSize.X / 2, DrawingSurface.TextureSize.Y / 2);
+
+                UnitX = Size.X / 256f;
+                UnitY = Size.Y / 256f;
+
+                DrawCross(ref Frame);
+                Frame.Dispose();
             }
 
 
@@ -245,7 +259,7 @@ namespace IngameScript
                 float ArrowLength = Size.Y * 0.8f;
 
                 float ArrowRotation = (float)VORData.Rotation;
-                float Deviation = (float)VORData.Deviation; // default between -12 and 12.
+                float Deviation = (float)VORData.Deviation;
 
 
                 // Circle
@@ -290,11 +304,21 @@ namespace IngameScript
 
 
                 // VOR Deviation Scale
-                float DSM2 = -1.0f * (Size.Y * 0.4f);
-                float DSM1 = -0.5f * (Size.Y * 0.4f);
-                float DSP1 = 0.5f * (Size.Y * 0.4f);
-                float DSP2 = 1.0f * (Size.Y * 0.4f);
+                float DSM4 = -1.0f * (Size.Y * 0.4f);
+                float DSM3 = -0.75f * (Size.Y * 0.4f);
+                float DSM2 = -0.5f * (Size.Y * 0.4f);
+                float DSM1 = -0.25f * (Size.Y * 0.4f);
+                float DSP1 = 0.25f * (Size.Y * 0.4f);
+                float DSP2 = 0.5f * (Size.Y * 0.4f);
+                float DSP3 = 0.75f * (Size.Y * 0.4f);
+                float DSP4 = 1.0f * (Size.Y * 0.4f);
 
+
+                float DSM4x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSM4 * -1;
+                float DSM4y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSM4;
+
+                float DSM3x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSM3 * -1;
+                float DSM3y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSM3;
 
                 float DSM2x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSM2 * -1;
                 float DSM2y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSM2;
@@ -308,23 +332,41 @@ namespace IngameScript
                 float DSP2x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSP2 * -1;
                 float DSP2y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSP2;
 
-                MySprite DSM2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM2x, DSM2y), new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSM1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM1x, DSM1y), new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSCSprite = MySprite.CreateSprite("Circle", Center, new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSP1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP1x, DSP1y), new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSP2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP2x, DSP2y), new Vector2(CircleSize, CircleSize) * 0.1f);
+                float DSP3x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSP3 * -1;
+                float DSP3y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSP3;
 
+                float DSP4x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSP4 * -1;
+                float DSP4y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSP4;
+
+                MySprite DSM4Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM4x, DSM4y), new Vector2(CircleSize, CircleSize) * 0.05f);
+                MySprite DSM3Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM3x, DSM3y), new Vector2(CircleSize, CircleSize) * 0.05f);
+                MySprite DSM2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM2x, DSM2y), new Vector2(CircleSize, CircleSize) * 0.05f);
+                MySprite DSM1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM1x, DSM1y), new Vector2(CircleSize, CircleSize) * 0.05f);
+                MySprite DSCSprite = MySprite.CreateSprite("Circle", Center, new Vector2(CircleSize, CircleSize) * 0.1f);
+                MySprite DSP1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP1x, DSP1y), new Vector2(CircleSize, CircleSize) * 0.05f);
+                MySprite DSP2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP2x, DSP2y), new Vector2(CircleSize, CircleSize) * 0.05f);
+                MySprite DSP3Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP3x, DSP3y), new Vector2(CircleSize, CircleSize) * 0.05f);
+                MySprite DSP4Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP4x, DSP4y), new Vector2(CircleSize, CircleSize) * 0.05f);
+
+                DSM4Sprite.Color = CockpitFGColor.Alpha(1f);
+                DSM3Sprite.Color = CockpitFGColor.Alpha(1f);
                 DSM2Sprite.Color = CockpitFGColor.Alpha(1f);
                 DSM1Sprite.Color = CockpitFGColor.Alpha(1f);
                 DSCSprite.Color = CockpitFGColor.Alpha(1f);
                 DSP1Sprite.Color = CockpitFGColor.Alpha(1f);
                 DSP2Sprite.Color = CockpitFGColor.Alpha(1f);
+                DSP3Sprite.Color = CockpitFGColor.Alpha(1f);
+                DSP4Sprite.Color = CockpitFGColor.Alpha(1f);
 
+                Frame.Add(DSM4Sprite);
+                Frame.Add(DSM3Sprite);
                 Frame.Add(DSM2Sprite);
                 Frame.Add(DSM1Sprite);
                 Frame.Add(DSCSprite);
                 Frame.Add(DSP1Sprite);
                 Frame.Add(DSP2Sprite);
+                Frame.Add(DSP3Sprite);
+                Frame.Add(DSP4Sprite);
 
             }
 
@@ -339,6 +381,7 @@ namespace IngameScript
 
                 // Line between the two columns
                 MySprite SeparationLine = MySprite.CreateSprite("SquareSimple", Center, new Vector2(3 * UnitX, 200 * UnitY));
+                SeparationLine.Color = CockpitFGColor.Alpha(1f);
                 Frame.Add(SeparationLine);
             }
 
@@ -416,7 +459,8 @@ namespace IngameScript
                     "DME: " + Math.Round(CombinedData.VORData.Distance / 1000, 1).ToString(),
                     "Radial: "+ Math.Round(CombinedData.VORData.Radial, 0).ToString(),
                     "OBS: "+ Math.Round(CombinedData.VORData.OBS, 0).ToString(),
-                    "Rel. OBS: "+ Math.Round(CombinedData.VORData.RelativeOBS, 0).ToString(),
+                    "HDG: "+ Math.Round(CombinedData.VORData.Heading, 0).ToString(),
+                    "DEV: "+ Math.Round(CombinedData.VORData.Deviation, 0).ToString()
                 };
 
                 List<string> Lines = new List<string>(_lines);

@@ -30,7 +30,7 @@ namespace IngameScript
             public double Distance { get; set; }
 
             public double OBS { get; set; }
-            public double RelativeOBS { get; set; }
+            public double Heading { get; set; }
 
             private double _deviation;
             public double Deviation
@@ -38,10 +38,6 @@ namespace IngameScript
                 get { return _deviation; }
                 set
                 {
-                    if (value > 180)
-                    {
-                        value -= 360;
-                    }
 
                     if (value > VORFullScaleDeflectionAngle)
                     {
