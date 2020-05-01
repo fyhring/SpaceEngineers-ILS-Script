@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LCD-Test", "LCD-Test\LCD-Te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VOR Transmitter Script", "VOR Transmitter Script\VOR Transmitter Script.csproj", "{76976769-E99B-4F7A-AB25-5ED31F635A46}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NDB Transmitter", "NDB Transmitter\NDB Transmitter.csproj", "{81B78DBD-5C0F-4D4B-8A1A-E18314C4C46D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -24,6 +26,8 @@ Global
 		{37EFA595-1C65-477B-BC2E-4DFEB83F59BF}.Debug|x64.Build.0 = Debug|x64
 		{76976769-E99B-4F7A-AB25-5ED31F635A46}.Debug|x64.ActiveCfg = Debug|x64
 		{76976769-E99B-4F7A-AB25-5ED31F635A46}.Debug|x64.Build.0 = Debug|x64
+		{81B78DBD-5C0F-4D4B-8A1A-E18314C4C46D}.Debug|x64.ActiveCfg = Debug|x64
+		{81B78DBD-5C0F-4D4B-8A1A-E18314C4C46D}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

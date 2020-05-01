@@ -24,7 +24,7 @@ namespace IngameScript
         #region mdk preserve
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
 
-        // Version = 0.3
+        // Version = 0.9
 
         string CockpitTag = "ILS Cockpit";
 
@@ -34,13 +34,17 @@ namespace IngameScript
 
         string VORAntennaChannel = "channel-VOR";
 
+        string NDBAntennaChannel = "channel-NDB";
+
         static double LOCFullScaleDeflectionAngle = 12;
 
         static double GSFullScaleDeflectionAngle = 6;
 
-        double GSAimAngle = 8;
+        static double GSAimAngle = 8;
 
         static double VORFullScaleDeflectionAngle = 24;
+
+        static bool HighUpdateRate = true;
 
         // DO NOT EDIT ANYTHING BELOW THIS COMMENT UNLESS YOU KNOW WHAT YOU'RE DOING!
         #endregion
@@ -61,6 +65,10 @@ namespace IngameScript
 
         bool ShipHasSelectedVOR = false;
 
+        bool ShipShouldListenForNDB = true;
+
+        bool ShipHasSelectedNDB = false;
+
         IMyShipController CockpitBlock;
         IMyTerminalBlock ReferenceBlock;
         IMyRadioAntenna Antenna;
@@ -74,7 +82,13 @@ namespace IngameScript
 
         public Program()
         {
-            Runtime.UpdateFrequency = UpdateFrequency.Once | UpdateFrequency.Update1;
+            if (HighUpdateRate)
+            {
+                Runtime.UpdateFrequency = UpdateFrequency.Once | UpdateFrequency.Update1;
+            } else
+            {
+                Runtime.UpdateFrequency = UpdateFrequency.Once | UpdateFrequency.Update10;
+            }
         }
 
 
@@ -103,6 +117,7 @@ namespace IngameScript
             Antenna = (IMyRadioAntenna)antennaListReferences[0];
             IGC.RegisterBroadcastListener(ILSAntennaChannel);
             IGC.RegisterBroadcastListener(VORAntennaChannel);
+            IGC.RegisterBroadcastListener(NDBAntennaChannel);
 
 
             // Mark setup as completed.
@@ -200,6 +215,11 @@ namespace IngameScript
                 SearchForVORMessages();
             }
 
+            if (ShipShouldListenForNDB)
+            {
+                SearchForNDBMessages();
+            }
+
             ILSData = new ILSDataSet();
             if (ShipHasSelectedILS)
             {
@@ -212,7 +232,13 @@ namespace IngameScript
                 VORData = HandleVOR();
             }
 
-            DrawToSurfaces(ILSData, VORData);
+            NDBDataSet NDBData = new NDBDataSet();
+            if (ShipHasSelectedNDB)
+            {
+                NDBData = HandleNDB();
+            }
+
+            DrawToSurfaces(ILSData, VORData, NDBData);
         }
 
 
@@ -365,7 +391,41 @@ namespace IngameScript
         }
 
 
-        public void DrawToSurfaces(ILSDataSet ILSData, VORDataSet VORData)
+        public NDBDataSet HandleNDB()
+        {
+            string NDBName = config.Get("NDBStation", "Name").ToString();
+            Vector3D NDBPosition = CreateVectorFromGPSCoordinateString(config.Get("NDBStation", "Position").ToString());
+
+            NDBDataSet NDBData = new NDBDataSet();
+            NDBData.Name = NDBName;
+
+            Vector3D HeadingVector = Vector3D.Normalize(Vector3D.Reject(Vector3D.Normalize(CockpitBlock.WorldMatrix.Forward), GravVectorNorm));
+            Vector3D CrossHeadingVector;
+            if (Math.Acos(Vector3D.Dot(CockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
+            {
+                CrossHeadingVector = Vector3D.Reject(CockpitBlock.WorldMatrix.Right, GravVectorNorm);
+            }
+            else
+            {
+                CrossHeadingVector = Vector3D.Reject(CockpitBlock.WorldMatrix.Left, GravVectorNorm);
+            }
+
+            Vector3D Direction = Vector3D.Normalize(Vector3D.Reject(NDBPosition - ShipVector, GravVectorNorm));
+            double Angle = ToDegrees(Math.Acos(Vector3D.Dot(Direction, HeadingVector)));
+            double CrossAngle = ToDegrees(Math.Acos(Vector3D.Dot(Direction, CrossHeadingVector)));
+
+            if(CrossAngle > 90)
+            {
+                Angle = 360 - Angle;
+            }
+
+            NDBData.Rotation = Angle;
+            
+            return NDBData;
+        }
+
+
+        public void DrawToSurfaces(ILSDataSet ILSData, VORDataSet VORData, NDBDataSet NDBData)
         {
             List<IMyTextSurfaceProvider> SurfaceProviders = GetScreens(CockpitTag);
             if (SurfaceProviders == null)
@@ -437,7 +497,7 @@ namespace IngameScript
                     IMyTextSurface ILSSurface = _sp.GetSurface(Array.IndexOf(DrawSurfaces, "ILS"));
                     Draw.DrawSurface(ILSSurface, Surface.ILS, ILSData);
                 }
-                catch (Exception Ex)
+                catch (Exception)
                 {
                     Echo("No ILS Surface found in \"" + _spTerminal.CustomName.ToString() + "\".");
                 }
@@ -449,9 +509,21 @@ namespace IngameScript
                     IMyTextSurface VORSurface = _sp.GetSurface(Array.IndexOf(DrawSurfaces, "VOR"));
                     Draw.DrawSurface(VORSurface, Surface.VOR, VORData);
                 }
-                catch (Exception Ex)
+                catch (Exception)
                 {
                     Echo("No VOR Surface found in \"" + _spTerminal.CustomName.ToString() + "\".");
+                }
+
+
+                // NDB Screen
+                try
+                {
+                    IMyTextSurface VORSurface = _sp.GetSurface(Array.IndexOf(DrawSurfaces, "NDB"));
+                    Draw.DrawSurface(VORSurface, Surface.NDB, NDBData);
+                }
+                catch (Exception)
+                {
+                    Echo("No NDB Surface found in \"" + _spTerminal.CustomName.ToString() + "\".");
                 }
 
 
@@ -538,7 +610,7 @@ namespace IngameScript
                 Echo("Error in building DrawSurfaces Loop");
             }
 
-            string[] DisplayServices = { "ILS", "VOR", "Data", "N/A" };
+            string[] DisplayServices = { "ILS", "VOR", "NDB", "Data", "N/A" };
 
             string CurrentValue;
             try
@@ -604,6 +676,7 @@ namespace IngameScript
                 return NextServiceIndex;
             }
         }
+
 
         public void WriteToScreens(List<IMyTerminalBlock> panels, string[] lines)
         {
@@ -827,6 +900,59 @@ namespace IngameScript
             ShipShouldListenForVOR = false;
         }
 
+
+        public void SearchForNDBMessages()
+        {
+            List<MyIni> ActiveNDBTransmitters = new List<MyIni>();
+            List<IMyBroadcastListener> listeners = new List<IMyBroadcastListener>();
+            IGC.GetBroadcastListeners(listeners);
+
+            // Parse any messages from active listeners on the selected channel.
+            listeners.ForEach(listener => {
+                if (!listener.IsActive) return;
+                if (listener.Tag != NDBAntennaChannel) return;
+                if (listener.HasPendingMessage)
+                {
+                    ActiveNDBTransmitters.Add(
+                        ParseBroadcastedMessage(listener.AcceptMessage())
+                    );
+                }
+            });
+
+            double shortestDistance = 99999;
+            MyIni selectedNDBTransmitter = new MyIni();
+
+            // Select the transmitter closest to the ship.
+            ActiveNDBTransmitters.ForEach(transmitter =>
+            {
+                string _GPS = transmitter.Get("Station", "Position").ToString();
+                double distance = CalculateShipDistanceFromGPSString(_GPS);
+
+                if (distance < shortestDistance)
+                {
+                    selectedNDBTransmitter = transmitter;
+                }
+            });
+
+            if (ActiveNDBTransmitters.Count == 0)
+            {
+                Echo("Not able to connect to any NDB transmitter signals.");
+                return;
+            }
+
+            string Name = selectedNDBTransmitter.Get("Station", "Name").ToString();
+            string Position = selectedNDBTransmitter.Get("Station", "Position").ToString();
+
+            Echo("Connected to NDB: " + Name);
+
+            config.Set("NDBStation", "Name", Name);
+            config.Set("NDBStation", "Position", Position);
+
+            SaveStorage();
+
+            ShipHasSelectedNDB = true;
+            ShipShouldListenForNDB = false;
+        }
 
         public void SendMessage(string message)
         {

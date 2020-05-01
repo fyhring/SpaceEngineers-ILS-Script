@@ -74,6 +74,10 @@ namespace IngameScript
                         DrawVOR(ref Frame, DrawingSurface, Data as VORDataSet);
                         break;
 
+                    case Surface.NDB:
+                        DrawNDB(ref Frame, DrawingSurface, Data as NDBDataSet);
+                        break;
+
                     case Surface.Data:
                         DrawDataScreen(ref Frame, DrawingSurface, Data as CombinedDataSet);
                         break;
@@ -96,7 +100,7 @@ namespace IngameScript
             {
                 var Frame = TextSurface.DrawFrame();
                 Size = new Vector2(DrawingSurface.SurfaceSize.Y, DrawingSurface.SurfaceSize.Y);
-                Center = new Vector2(DrawingSurface.TextureSize.X / 2, DrawingSurface.TextureSize.Y / 2);
+                Center = new Vector2(DrawingSurface.TextureSize.Y / 2, DrawingSurface.TextureSize.Y / 2);
 
                 UnitX = Size.X / 256f;
                 UnitY = Size.Y / 256f;
@@ -368,6 +372,45 @@ namespace IngameScript
                 Frame.Add(DSP3Sprite);
                 Frame.Add(DSP4Sprite);
 
+            }
+
+
+            private static void DrawNDB(ref MySpriteDrawFrame Frame, IMyTextSurface Surface, NDBDataSet NDBData)
+            {
+                if (NDBData.Rotation == null)
+                {
+                    DrawCross(ref Frame);
+                    return;
+                }
+
+                // Vars
+                float CircleSize = Size.Y * 0.95f;
+                float ArrowLength = Size.Y * 0.8f;
+                float ArrowRotation = (float)NDBData.Rotation;
+
+                // Circle
+                MySprite Circle1 = MySprite.CreateSprite("Circle", Center, new Vector2(CircleSize, CircleSize));
+                Circle1.Color = CockpitFGColor.Alpha(1f);
+                Frame.Add(Circle1);
+
+                MySprite Circle2 = MySprite.CreateSprite("Circle", Center, new Vector2(CircleSize, CircleSize) * 0.95f);
+                Circle2.Color = CockpitBGColor.Alpha(1f);
+                Frame.Add(Circle2);
+
+                // Arrow
+                MySprite ArrowBody = MySprite.CreateSprite("SquareSimple", Center, new Vector2(12 * UnitX, ArrowLength));
+                ArrowBody.Color = Color.LawnGreen.Alpha(1f);
+                ArrowBody.RotationOrScale = ToRadian(ArrowRotation);
+                Frame.Add(ArrowBody);
+
+                float AConstant = ArrowLength / 2.1f;
+                float Ax = (float)Math.Sin(ToRadian(ArrowRotation)) * AConstant;
+                float Ay = (float)Math.Cos(ToRadian(ArrowRotation)) * AConstant * -1;
+
+                MySprite ArrowHead = MySprite.CreateSprite("Triangle", Center + new Vector2(Ax, Ay), Size * 0.2f);
+                ArrowHead.Color = Color.LawnGreen.Alpha(1f);
+                ArrowHead.RotationOrScale = ToRadian(ArrowRotation);
+                Frame.Add(ArrowHead);
             }
 
 

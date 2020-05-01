@@ -21,12 +21,10 @@ namespace IngameScript
 {
     partial class Program
     {
-        public enum Surface
+        public class NDBDataSet : IDataSet
         {
-            Data,
-            ILS,
-            VOR,
-            NDB
+            public double? Rotation { get; set; }
+            public string Name { get; set; }
         }
     }
 }
