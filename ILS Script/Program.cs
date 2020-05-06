@@ -24,9 +24,9 @@ namespace IngameScript
         #region mdk preserve
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
 
-        // Version = 0.9
+        // Version = 1.0
 
-        string CockpitTag = "ILS Cockpit";
+        string CockpitTag = "Cockpit";
 
         string AntennaTag = "ILS Antenna";
 
@@ -159,6 +159,9 @@ namespace IngameScript
                         ShipShouldListenForILS = false;
                         // ResetDefaultILSInConfig();
                         break;
+                    case "switchrunway":
+                        SwitchILSRunway();
+                        break;
 
                     // VOR Commands
                     case "startvor":
@@ -271,18 +274,6 @@ namespace IngameScript
             // GlideSlope
             double GSAngle;
             CalculateILSGlideSlope(GSWaypointVector, out GSAngle);
-
-
-            // LOC & G/S Instruments
-            /*string LOCInstrumentString, LOCInstrumentIndicator, GSInstrumentString, GSInstrumentIndicator;
-            BuildLocalizerAndGlideSlopeIndications(
-                Deviation,
-                GSAngle,
-                out LOCInstrumentString,
-                out LOCInstrumentIndicator,
-                out GSInstrumentString,
-                out GSInstrumentIndicator
-            );*/
 
             double RunwayDesinator = Math.Round(RWYHDG / 10);
 
@@ -678,6 +669,32 @@ namespace IngameScript
         }
 
 
+        public void SwitchILSRunway()
+        {
+            string ActiveRunway = config.Get("LocalizerData", "RWYHDG").ToString();
+            string RunwayHDGA = config.Get("Runway", "HeadingA").ToString();
+            string RunwayHDGB = config.Get("Runway", "HeadingB").ToString();
+
+            string GPSA = config.Get("TouchdownZone", "GPSA").ToString();
+            string GPSB = config.Get("TouchdownZone", "GPSB").ToString();
+
+            string NewRunwayHDG;
+            string NewGPS;
+
+            if (ActiveRunway == RunwayHDGA)
+            {
+                NewRunwayHDG = RunwayHDGB;
+                NewGPS = GPSB;
+            } else
+            {
+                NewRunwayHDG = RunwayHDGA;
+                NewGPS = GPSA;
+            }
+
+            config.Set("LocalizerData", "RWYHDG", NewRunwayHDG);
+            config.Set("LocalizerData", "GPS", NewGPS);
+        }
+
         public void WriteToScreens(List<IMyTerminalBlock> panels, string[] lines)
         {
             panels.ForEach(panel =>
@@ -685,64 +702,7 @@ namespace IngameScript
                 // Call via WriteToScreens(list, new {"a", "b", "c"}))
             });
         }
-
-
-        public void BuildLocalizerAndGlideSlopeIndications(
-            double Deviation,
-            double Angle,
-            out string LOCInstrumentString,
-            out string LOCInstrumentIndicator,
-            out string GSInstrumentString,
-            out string GSInstrumentIndicator
-        )
-        {
-            LOCInstrumentString = "*-----*-----|-----*-----*";
-            string stdLOCInstrumentIndicator = "------------------------^------------------------";
-
-            try
-            {
-                LOCInstrumentIndicator = stdLOCInstrumentIndicator.Substring((int)Deviation + 12, 25);
-            }
-            catch (Exception)
-            {
-                if (Deviation > 12)
-                {
-                    LOCInstrumentIndicator = "^------------------------";
-                }
-                else if (Deviation < -12)
-                {
-                    LOCInstrumentIndicator = "------------------------^";
-                }
-                else
-                {
-                    LOCInstrumentIndicator = "-----------???-----------";
-                }
-            }
-
-            GSInstrumentString = "*-----*-----|-----*-----*";
-            string stdGSInstrumentIndicator = "------------------------^------------------------";
-
-            try
-            {
-                GSInstrumentIndicator = stdGSInstrumentIndicator.Substring((int)Angle - (int)GSAimAngle + 12, 25);
-            }
-            catch (Exception)
-            {
-                if (Angle > 12)
-                {
-                    GSInstrumentIndicator = "^------------------------";
-                }
-                else if (Angle < -12)
-                {
-                    GSInstrumentIndicator = "------------------------^";
-                }
-                else
-                {
-                    GSInstrumentIndicator = "-----------???-----------";
-                }
-            }
-        }
-
+        
 
         public MyIni ParseBroadcastedMessage(MyIGCMessage message)
         {
@@ -953,6 +913,7 @@ namespace IngameScript
             ShipHasSelectedNDB = true;
             ShipShouldListenForNDB = false;
         }
+
 
         public void SendMessage(string message)
         {
