@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.1062
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirNavigation Script", "ILS Script\AirNavigation Script.csproj", "{DA70BE36-902C-43ED-A072-CDF3544E0EE2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AirNavigationScript", "ILS Script\AirNavigationScript.csproj", "{DA70BE36-902C-43ED-A072-CDF3544E0EE2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ILS Transmitter Script", "ILS Transmitter Script\ILS Transmitter Script.csproj", "{7F9EF8DB-43AE-46BE-9025-58F1EF386095}"
 EndProject
