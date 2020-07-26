@@ -139,35 +139,38 @@ namespace IngameScript
                 Frame.Add(Circle2);
 
                 // Arrow
-                MySprite ArrowBody = MySprite.CreateSprite("SquareSimple", Center, new Vector2(12 * UnitX, ArrowLength)); // new Vector2(10 * UnitX, 60 * UnitY)
-                ArrowBody.Color = Color.LawnGreen.Alpha(1f);
-                ArrowBody.RotationOrScale = ToRadian(ArrowRotation);
-                Frame.Add(ArrowBody);
+                if (!ILSData.FailLocalizer)
+                {
+                    MySprite ArrowBody = MySprite.CreateSprite("SquareSimple", Center, new Vector2(12 * UnitX, ArrowLength)); // new Vector2(10 * UnitX, 60 * UnitY)
+                    ArrowBody.Color = Color.LawnGreen.Alpha(1f);
+                    ArrowBody.RotationOrScale = ToRadian(ArrowRotation);
+                    Frame.Add(ArrowBody);
 
-                float AConstant = ArrowLength / 2.1f;
-                float Ax = (float)Math.Sin(ToRadian(ArrowRotation)) * AConstant;
-                float Ay = (float)Math.Cos(ToRadian(ArrowRotation)) * AConstant * -1;
+                    float AConstant = ArrowLength / 2.1f;
+                    float Ax = (float)Math.Sin(ToRadian(ArrowRotation)) * AConstant;
+                    float Ay = (float)Math.Cos(ToRadian(ArrowRotation)) * AConstant * -1;
 
-                MySprite ArrowHead = MySprite.CreateSprite("Triangle", Center + new Vector2(Ax, Ay), Size * 0.2f);
-                ArrowHead.Color = Color.LawnGreen.Alpha(1f);
-                ArrowHead.RotationOrScale = ToRadian(ArrowRotation);
-                Frame.Add(ArrowHead);
+                    MySprite ArrowHead = MySprite.CreateSprite("Triangle", Center + new Vector2(Ax, Ay), Size * 0.2f);
+                    ArrowHead.Color = Color.LawnGreen.Alpha(1f);
+                    ArrowHead.RotationOrScale = ToRadian(ArrowRotation);
+                    Frame.Add(ArrowHead);
 
+                
+                    // Deviation bar
+                    float DConstant = Deviation / (float)LOCFullScaleDeflectionAngle * (Size.Y * 0.4f);
+                    float Dx = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DConstant * -1;
+                    float Dy = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DConstant;
 
-                // Deviation bar
-                float DConstant = Deviation / (float) LOCFullScaleDeflectionAngle * (Size.Y * 0.4f);
-                float Dx = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DConstant * -1;
-                float Dy = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DConstant;
+                    MySprite DeviationBarMask = MySprite.CreateSprite("SquareSimple", Center, new Vector2(12 * UnitX, ArrowLength / 2.7f));
+                    DeviationBarMask.Color = CockpitBGColor.Alpha(1f);
+                    DeviationBarMask.RotationOrScale = ToRadian(ArrowRotation);
+                    Frame.Add(DeviationBarMask);
 
-                MySprite DeviationBarMask = MySprite.CreateSprite("SquareSimple", Center, new Vector2(12 * UnitX, ArrowLength / 2.7f));
-                DeviationBarMask.Color = CockpitBGColor.Alpha(1f);
-                DeviationBarMask.RotationOrScale = ToRadian(ArrowRotation);
-                Frame.Add(DeviationBarMask);
-
-                MySprite DeviationBar = MySprite.CreateSprite("SquareSimple", Center + new Vector2(Dx, Dy), new Vector2(12 * UnitX, ArrowLength / 3));
-                DeviationBar.Color = Color.LawnGreen.Alpha(1f);
-                DeviationBar.RotationOrScale = ToRadian(ArrowRotation);
-                Frame.Add(DeviationBar);
+                    MySprite DeviationBar = MySprite.CreateSprite("SquareSimple", Center + new Vector2(Dx, Dy), new Vector2(12 * UnitX, ArrowLength / 3));
+                    DeviationBar.Color = Color.LawnGreen.Alpha(1f);
+                    DeviationBar.RotationOrScale = ToRadian(ArrowRotation);
+                    Frame.Add(DeviationBar);
+                }
 
 
 
@@ -452,9 +455,13 @@ namespace IngameScript
                 string[] _lines = {
                     "RWY: " + CombinedData.ILSData.RunwayNumber.ToString(),
                     "DME: " + Math.Round(CombinedData.ILSData.Distance / 1000, 1).ToString(),
-                    "Bearing: "+ Math.Round(CombinedData.ILSData.Bearing, 0).ToString(),
+                    "LDev: " + Math.Round(CombinedData.ILSData.LocalizerDeviation, 1).ToString(),
+                    "ROT: " + CombinedData.ILSData.Rotation.ToString(),
+                    "FailL: "+ CombinedData.ILSData.FailLocalizer.ToString(),
+                    "GDev: "+ Math.Round(CombinedData.ILSData.GlideSlopeDeviation, 1).ToString(),
+                    /*"Bearing: "+ Math.Round(CombinedData.ILSData.Bearing, 0).ToString(),
                     "Rel. Bearing: "+ Math.Round(CombinedData.ILSData.RelativeBearing, 0).ToString(),
-                    "Track: "+ Math.Round(CombinedData.ILSData.Track, 0).ToString(),
+                    "Track: "+ Math.Round(CombinedData.ILSData.Track, 0).ToString(),*/
                 };
 
                 List<string> Lines = new List<string>(_lines);

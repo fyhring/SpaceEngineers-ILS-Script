@@ -256,6 +256,9 @@ namespace IngameScript
             GSGPS = config.Get("GlideSlopeData", "GPS").ToString();
             RWYHDG = config.Get("LocalizerData", "RWYHDG").ToDouble(-1);
 
+            Vector3D NorthVector = CreateVectorFromGPSCoordinateString(config.Get("LocalizerData", "NorthVector").ToString());
+            Vector3D CrossVector = CreateVectorFromGPSCoordinateString(config.Get("LocalizerData", "CrossVector").ToString());
+
 
             // Waypoint vevtors
             string locWayPointName, gsWayPointName;
@@ -266,28 +269,90 @@ namespace IngameScript
             double Distance = CalculateShipDistanceFromVector(GSWaypointVector);
 
             // Localizer
-            double Bearing, RBearing, Deviation, Track;
-            CalculateILSLocalizer(LOCWaypointVector, RWYHDG, out Bearing, out RBearing, out Deviation, out Track);
+            // CalculateILSLocalizer(LOCWaypointVector, RWYHDG, NorthVector, CrossVector out Bearing, out RBearing, out Deviation, out Track);
 
-            // @TODO Implement a safety feature that disables the LOC view when ship is more than perpendicular to the RWY HDG.
+            Vector3D RadialVector = Vector3D.Negate(LOCWaypointVector) + ShipVector;
+            Vector3D RRadialVector = Vector3D.Reject(RadialVector, GravVectorNorm);
+            Vector3D RadialVectorNorm = Vector3D.Normalize(RRadialVector);
+
+            double NorthAngle = ToDegrees(Math.Acos(Vector3D.Dot(RadialVectorNorm, NorthVector)));
+            double CrossAngle = ToDegrees(Math.Acos(Vector3D.Dot(RadialVectorNorm, CrossVector)));
+
+            double Radial = NorthAngle;
+            if (CrossAngle < 90)
+            {
+                Radial = 360 - NorthAngle;
+            }
+
+            Vector3D ACNorthVector = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
+            Vector3D ACNorthVectorNorm = Vector3D.Normalize(ACNorthVector);
+
+            Vector3D Direction = Vector3D.Normalize(Vector3D.Reject(Vector3D.Normalize(CockpitBlock.WorldMatrix.Forward), GravVectorNorm));
+            double Heading = ToDegrees(Math.Acos(Vector3D.Dot(Direction, ACNorthVectorNorm)));
+
+            Vector3D CrossDirection;
+            if (Math.Acos(Vector3D.Dot(CockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
+            {
+                CrossDirection = Vector3D.Reject(CockpitBlock.WorldMatrix.Right, GravVectorNorm);
+            }
+            else
+            {
+                CrossDirection = Vector3D.Reject(CockpitBlock.WorldMatrix.Left, GravVectorNorm);
+            }
+
+            double AngleCross = ToDegrees(Math.Acos(Vector3D.Dot(CrossDirection, ACNorthVectorNorm)));
+            if (AngleCross < 90)
+            {
+                Heading = 360 - Heading;
+            }
+
+            double Rotation = RWYHDG - Heading - 180;
+            Echo("ILS ROT: " + Rotation.ToString());
+
+
+            // Deviation
+            double Deviation = Radial - RWYHDG;
+            Deviation *= -1;
+            if (Deviation > 90)
+            {
+                Deviation -= 180;
+                Rotation -= 180;
+            }
+            else if (Deviation < -90)
+            {
+                Deviation += 180;
+                Rotation -= 180;
+            }
 
             // GlideSlope
             double GSAngle;
             CalculateILSGlideSlope(GSWaypointVector, out GSAngle);
 
+
+            // @TODO Implement a safety feature that disables the LOC view when ship is more than perpendicular to the RWY HDG.
+            bool FailLocalizer = false;
+            if ((Rotation < -460 && Rotation > -620) || Rotation > -260)
+            {
+                FailLocalizer = true;
+            }
+
+            // if Math.Abs(Heading - RWYHDG) > 90 { FailLocalizer = true; } // Try this to avoid backcourse.
+
+
             double RunwayDesinator = Math.Round(RWYHDG / 10);
 
             return new ILSDataSet
             {
-                Rotation = RWYHDG - Bearing,
+                Rotation = Rotation,
                 LocalizerDeviation = Deviation,
                 GlideSlopeDeviation = GSAngle - GSAimAngle,
                 Distance = Distance,
                 RunwayNumber = RunwayDesinator,
                 RunwayHeading = RWYHDG,
-                Bearing = Bearing,
+                FailLocalizer = FailLocalizer
+                /*Bearing = Bearing,
                 RelativeBearing = RBearing,
-                Track = Track
+                Track = Track*/
             };
         }
 
@@ -695,6 +760,7 @@ namespace IngameScript
             config.Set("LocalizerData", "GPS", NewGPS);
         }
 
+
         public void WriteToScreens(List<IMyTerminalBlock> panels, string[] lines)
         {
             panels.ForEach(panel =>
@@ -767,6 +833,8 @@ namespace IngameScript
             string GPSB = selectedILSTransmitter.Get("TouchdownZone", "GPSB").ToString();
             string HeadingA = selectedILSTransmitter.Get("Runway", "HeadingA").ToString();
             string HeadingB = selectedILSTransmitter.Get("Runway", "HeadingB").ToString();
+            string NorthVector = selectedILSTransmitter.Get("Station", "NorthVector").ToString();
+            string CrossVector = selectedILSTransmitter.Get("Station", "CrossVector").ToString();
 
             double TouchdownZoneADistance = CalculateShipDistanceFromGPSString(GPSA);
             double TouchdownZoneBDistance = CalculateShipDistanceFromGPSString(GPSB);
@@ -788,6 +856,9 @@ namespace IngameScript
             config.Set("TouchdownZone", "GPSB", GPSB);
             config.Set("Runway", "HeadingA", HeadingA);
             config.Set("Runway", "HeadingB", HeadingB);
+
+            config.Set("LocalizerData", "NorthVector", NorthVector);
+            config.Set("LocalizerData", "CrossVector", CrossVector);
 
             config.Set("LocalizerData", "RWYHDG", ActiveHeading);
             config.Set("LocalizerData", "GPS", ActingLocalizer);
@@ -930,10 +1001,12 @@ namespace IngameScript
             ShipVectorNorm = Vector3D.Normalize(ShipVector);
         }
 
-
+        /*
         public void CalculateILSLocalizer(
             Vector3D LOCWaypointVector,
             double RWYHDG,
+            Vector3D NorthVector,
+            Vector3D CrossVector,
             out double Bearing,
             out double RBearing,
             out double Deviation,
@@ -941,50 +1014,11 @@ namespace IngameScript
         )
         {
 
-            Vector3D RForwardVector, VectorNorth, RVectorNorth, LOCWaypointNorm, LReject;
-            LOCWaypointNorm = Vector3D.Normalize(LOCWaypointVector);
+            Vector3D LOCWaypointNorm = Vector3D.Normalize(LOCWaypointVector); // Is this needed??
 
-            // Localizer
-            RForwardVector = Vector3D.Reject(CockpitBlock.WorldMatrix.Forward, LOCWaypointNorm);
-            VectorNorth = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
-            RVectorNorth = Vector3D.Reject(LOCWaypointNorm, GravVectorNorm);
-            Bearing = Math.Acos(Vector3D.Dot(Vector3D.Normalize(RForwardVector), Vector3D.Normalize(VectorNorth))) * 180 / Math.PI;
-            RBearing = Math.Acos(Vector3D.Dot(Vector3D.Normalize(RForwardVector), Vector3D.Normalize(RVectorNorth))) * 180 / Math.PI;
 
-            if (Math.Acos(Vector3D.Dot(CockpitBlock.WorldMatrix.Down, GravVectorNorm)) < (Math.PI / 2))
-            {
-                LReject = Vector3D.Reject(CockpitBlock.WorldMatrix.Right, GravVectorNorm);
-            }
-            else
-            {
-                LReject = Vector3D.Reject(CockpitBlock.WorldMatrix.Left, GravVectorNorm);
-            }
-
-            Vector3D projection = Vector3D.ProjectOnVector(ref LReject, ref LOCWaypointNorm);
-            Vector3D projectionNorm = Vector3D.Normalize(projection);
-
-            if (LReject.GetDim(1) <= 0)
-            {
-                Bearing = 360 - Bearing;
-            }
-
-            if (projectionNorm.GetDim(0) < 0)
-            {
-                RBearing = 0 - RBearing;
-            }
-
-            Track = Bearing + RBearing;
-            if (Track > 360)
-            {
-                Track -= 360;
-            }
-            if (Track < 0)
-            {
-                Track += 360;
-            }
-
-            Deviation = RWYHDG - Track;
-        }
+            
+        }*/
 
 
         public void CalculateILSGlideSlope(Vector3D GSWaypointVector, out double Angle)

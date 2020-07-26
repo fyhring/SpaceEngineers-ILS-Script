@@ -81,6 +81,10 @@ namespace IngameScript
             public double RelativeBearing { get; set; }
 
             public double Track { get; set; }
+
+            public bool FailLocalizer { get; set; }
+
+            public bool FailGlideSlope { get; set; }
         }
     }
 }
