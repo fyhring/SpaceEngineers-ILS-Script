@@ -69,7 +69,7 @@ namespace IngameScript
         public void Main(string argument, UpdateType updateSource)
         {
             bool RecalculateRunwayHeadings = false;
-            if (argument == "recalculate")
+            if (argument == "reset")
             {
                 RecalculateRunwayHeadings = true;
             }
