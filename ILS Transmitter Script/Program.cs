@@ -69,7 +69,7 @@ namespace IngameScript
         public void Main(string argument, UpdateType updateSource)
         {
             bool RecalculateRunwayHeadings = false;
-            if (argument == "reset")
+            if (argument == "reset" || argument == "recalculate")
             {
                 RecalculateRunwayHeadings = true;
             }
@@ -84,7 +84,7 @@ namespace IngameScript
 
 
             // Set default data if 
-            if (!IsDataFormatValid())
+            if (!IsDataFormatValid() || argument == "reset")
             {
                 SetDefaultData();
                 return;
@@ -152,6 +152,16 @@ namespace IngameScript
             config.Set("Runway", "HeadingB", -1);
             config.Set("TouchdownZone", "GPSA", "N/A");
             config.Set("TouchdownZone", "GPSB", "N/A");
+            
+            Vector3D NorthVector = FindNorthVector();
+            Vector3D CrossVector = FindCrossVector(NorthVector);
+            
+            string NorthVectorGPS = ConvertVector3DToGPS(NorthVector);
+            string CrossVectorGPS = ConvertVector3DToGPS(CrossVector);
+            
+            config.Set("Station", "NorthVector", NorthVectorGPS);
+            config.Set("Station", "CrossVector", CrossVectorGPS);
+
             Me.CustomData = config.ToString();
         }
 
@@ -214,7 +224,7 @@ namespace IngameScript
         }
 
 
-        public void FindCockpitBlock()
+        public IMyShipController FindCockpitBlock()
         {
             List<IMyTerminalBlock> cockpitListReferences = new List<IMyTerminalBlock>();
             GridTerminalSystem.SearchBlocksOfName(CockpitTag, cockpitListReferences);
@@ -224,6 +234,31 @@ namespace IngameScript
             }
 
             CockpitBlock = (IMyShipController)cockpitListReferences[0];
+
+            return CockpitBlock;
+        }
+
+
+        public Vector3D FindNorthVector()
+        {
+            IMyShipController CockpitBlock = FindCockpitBlock();
+            Vector3D GravVector = CockpitBlock.GetNaturalGravity();
+            Vector3D GravVectorNorm = Vector3D.Normalize(GravVector);
+
+            Vector3D NorthVector = Vector3D.Reject(new Vector3D(0, -1, 0), GravVectorNorm);
+            Vector3D NorthVectorNorm = Vector3D.Normalize(NorthVector);
+
+            return NorthVectorNorm;
+        }
+
+
+        public Vector3D FindCrossVector(Vector3D NorthVectorNorm)
+        {
+            IMyShipController CockpitBlock = FindCockpitBlock();
+            Vector3D GravVector = CockpitBlock.GetNaturalGravity();
+            Vector3D GravVectorNorm = Vector3D.Normalize(GravVector);
+
+            return Vector3D.Cross(NorthVectorNorm, GravVectorNorm);
         }
 
 
@@ -244,6 +279,23 @@ namespace IngameScript
             vector.Z = StringToDouble(splitCoord[4]);
 
             return vector;
+        }
+
+
+        public string ConvertVector3DToGPS(Vector3D Position)
+        {
+            // Turning this:
+            // X:-0.0706388473865866 Y:-0.996187825944044 Z:-0.0511856296315009
+            // Into this:
+            // GPS:ILS:48282.5704107185:-5272.59389249216:35177.8783341206:
+            string _position = Position.ToString();
+            _position = _position
+                .Replace(" ", "")
+                .Replace("X", "")
+                .Replace("Y", "")
+                .Replace("Z", "");
+
+            return "GPS:ILS" + _position + ":";
         }
 
 
