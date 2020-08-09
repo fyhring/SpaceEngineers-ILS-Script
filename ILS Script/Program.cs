@@ -113,7 +113,7 @@ namespace IngameScript
 
             if (antennaListReferences.Count == 0)
             {
-                throw new Exception("No ILS Receiver Antenna! Check naming tag.");
+                throw new Exception("No ILS Receiver Antenna!\nCheck naming tag.");
             }
 
             Antenna = (IMyRadioAntenna)antennaListReferences[0];
@@ -132,12 +132,20 @@ namespace IngameScript
         {
             if (!SetupComplete)
             {
-                Echo("Running setup.");
-                Setup();
-                InitializeStorage();
+                try
+                {
+                    Echo("Running setup.");
+                    Setup();
+                    InitializeStorage();
+                }
+                catch (Exception e)
+                {
+                    Echo(e.Message);
+                    return;
+                }
             } else
             {
-                Echo("Skipping setup");
+                // Echo("Skipping setup");
             }
 
             if (!argument.Equals(""))
@@ -212,16 +220,19 @@ namespace IngameScript
             {
                 // If ship is connected to an ILS and is listening, another ILS closer by will override
                 // the active transmitter. Normally ShipShouldListen will be false once connected.
+                Echo("Is listing for ILS signals");
                 SearchForILSMessages();
             }
 
             if (ShipShouldListenForVOR)
             {
+                Echo("Is listing for VOR signals");
                 SearchForVORMessages();
             }
 
             if (ShipShouldListenForNDB)
             {
+                Echo("Is listing for NDB signals");
                 SearchForNDBMessages();
             }
 
