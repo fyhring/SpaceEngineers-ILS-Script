@@ -36,9 +36,9 @@ namespace IngameScript
 
         string NDBAntennaChannel = "channel-NDB";
 
-        static double LOCFullScaleDeflectionAngle = 12;
+        static double LOCFullScaleDeflectionAngle = 18;
 
-        static double GSFullScaleDeflectionAngle = 4;
+        static double GSFullScaleDeflectionAngle = 2.5;
 
         static double GSAimAngle = 8;
 
@@ -344,11 +344,16 @@ namespace IngameScript
 
 
             bool FailGlideSlope = false;
-            if (GlideSlopeDeviation > 1.5 * GSFullScaleDeflectionAngle)
+            if (GlideSlopeDeviation > 1 + GSFullScaleDeflectionAngle)
             {
                 FailGlideSlope = true;
             }
 
+            // Fail glideslope indicator if Aircraft is more than perpendicular to the runway hdg.
+            if ((Rotation < -460 && Rotation > -620) || Rotation > -260)
+            {
+                FailGlideSlope = true;
+            }
 
 
             double RunwayDesinator = Math.Round(RWYHDG / 10);

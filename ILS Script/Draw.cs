@@ -462,10 +462,11 @@ namespace IngameScript
                 string[] _lines = {
                     "RWY: " + CombinedData.ILSData.RunwayNumber.ToString(),
                     "DME: " + Math.Round(CombinedData.ILSData.Distance / 1000, 1).ToString(),
+                    "GDev: "+ Math.Round(CombinedData.ILSData.GlideSlopeDeviation, 1).ToString(),
+                    "FailGS: "+ CombinedData.ILSData.FailGlideSlope.ToString(),
                     /*"LDev: " + Math.Round(CombinedData.ILSData.LocalizerDeviation, 1).ToString(),
                     "ROT: " + CombinedData.ILSData.Rotation.ToString(),
                     "FailL: "+ CombinedData.ILSData.FailLocalizer.ToString(),
-                    "GDev: "+ Math.Round(CombinedData.ILSData.GlideSlopeDeviation, 1).ToString(),
                     "Bearing: "+ Math.Round(CombinedData.ILSData.Bearing, 0).ToString(),
                     "Rel. Bearing: "+ Math.Round(CombinedData.ILSData.RelativeBearing, 0).ToString(),
                     "Track: "+ Math.Round(CombinedData.ILSData.Track, 0).ToString(),*/
