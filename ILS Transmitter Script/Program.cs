@@ -69,9 +69,14 @@ namespace IngameScript
         public void Main(string argument, UpdateType updateSource)
         {
             bool RecalculateRunwayHeadings = false;
-            if (argument == "reset" || argument == "recalculate")
+            if (argument == "reset")
             {
                 RecalculateRunwayHeadings = true;
+            }
+
+            if (argument == "recalculate")
+            {
+                UpdatePositionVectors();
             }
 
             if (!SetupComplete)
@@ -163,6 +168,23 @@ namespace IngameScript
             config.Set("Station", "CrossVector", CrossVectorGPS);
 
             Me.CustomData = config.ToString();
+        }
+
+
+        public void UpdatePositionVectors()
+        {
+            Vector3D NorthVector = FindNorthVector();
+            Vector3D CrossVector = FindCrossVector(NorthVector);
+
+            string NorthVectorGPS = ConvertVector3DToGPS(NorthVector);
+            string CrossVectorGPS = ConvertVector3DToGPS(CrossVector);
+
+            config.Set("Station", "NorthVector", NorthVectorGPS);
+            config.Set("Station", "CrossVector", CrossVectorGPS);
+
+            Me.CustomData = config.ToString();
+
+            DetectRunwayHeadings();
         }
 
 
