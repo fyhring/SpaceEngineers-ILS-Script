@@ -24,7 +24,7 @@ namespace IngameScript
         #region mdk preserve
         // YOU CAN EDIT THESE VALUES IF YOU WANT TO.
 
-        // Version = 1.0
+        // Version = 1.2
 
         string CockpitTag = "Cockpit";
 
@@ -38,13 +38,15 @@ namespace IngameScript
 
         static double LOCFullScaleDeflectionAngle = 12;
 
-        static double GSFullScaleDeflectionAngle = 6;
+        static double GSFullScaleDeflectionAngle = 4;
 
         static double GSAimAngle = 8;
 
         static double VORFullScaleDeflectionAngle = 24;
 
         static bool HighUpdateRate = true;
+
+        // static bool DisableBackcourseBlockage = false;
 
         // DO NOT EDIT ANYTHING BELOW THIS COMMENT UNLESS YOU KNOW WHAT YOU'RE DOING!
         #endregion
@@ -189,7 +191,7 @@ namespace IngameScript
                 }
 
                 // SurfaceToggle 0 1
-                if (argument.ToLower().StartsWith("surfacetoggle "))
+                if (argument.ToLower().StartsWith("surfacetoggle ") || argument.ToLower().StartsWith("togglesurface "))
                 {
                     string[] argPart = argument.Split(' ');
                     int SurfaceProviderIndex, SurfaceIndex;
@@ -269,8 +271,6 @@ namespace IngameScript
             double Distance = CalculateShipDistanceFromVector(GSWaypointVector);
 
             // Localizer
-            // CalculateILSLocalizer(LOCWaypointVector, RWYHDG, NorthVector, CrossVector out Bearing, out RBearing, out Deviation, out Track);
-
             Vector3D RadialVector = Vector3D.Negate(LOCWaypointVector) + ShipVector;
             Vector3D RRadialVector = Vector3D.Reject(RadialVector, GravVectorNorm);
             Vector3D RadialVectorNorm = Vector3D.Normalize(RRadialVector);
@@ -307,8 +307,6 @@ namespace IngameScript
             }
 
             double Rotation = RWYHDG - Heading - 180;
-            Echo("ILS ROT: " + Rotation.ToString());
-
 
             // Deviation
             double Deviation = Radial - RWYHDG;
@@ -327,16 +325,19 @@ namespace IngameScript
             // GlideSlope
             double GSAngle;
             CalculateILSGlideSlope(GSWaypointVector, out GSAngle);
+            double GlideSlopeDeviation = GSAngle - GSAimAngle;
 
 
-            // @TODO Implement a safety feature that disables the LOC view when ship is more than perpendicular to the RWY HDG.
+            // @TODO Implement a safety feature that disables the LOC view when ship is more than perpendicular to the RWY HDG. Or maybe not?
             bool FailLocalizer = false;
-            if ((Rotation < -460 && Rotation > -620) || Rotation > -260)
+
+
+            bool FailGlideSlope = false;
+            if (GlideSlopeDeviation > 1.5 * GSFullScaleDeflectionAngle)
             {
-                FailLocalizer = true;
+                FailGlideSlope = true;
             }
 
-            // if Math.Abs(Heading - RWYHDG) > 90 { FailLocalizer = true; } // Try this to avoid backcourse.
 
 
             double RunwayDesinator = Math.Round(RWYHDG / 10);
@@ -345,14 +346,12 @@ namespace IngameScript
             {
                 Rotation = Rotation,
                 LocalizerDeviation = Deviation,
-                GlideSlopeDeviation = GSAngle - GSAimAngle,
+                GlideSlopeDeviation = GlideSlopeDeviation,
                 Distance = Distance,
                 RunwayNumber = RunwayDesinator,
                 RunwayHeading = RWYHDG,
-                FailLocalizer = FailLocalizer
-                /*Bearing = Bearing,
-                RelativeBearing = RBearing,
-                Track = Track*/
+                FailLocalizer = FailLocalizer,
+                FailGlideSlope = FailGlideSlope
             };
         }
 
@@ -1000,25 +999,6 @@ namespace IngameScript
             ShipVector = ReferenceBlock.GetPosition();
             ShipVectorNorm = Vector3D.Normalize(ShipVector);
         }
-
-        /*
-        public void CalculateILSLocalizer(
-            Vector3D LOCWaypointVector,
-            double RWYHDG,
-            Vector3D NorthVector,
-            Vector3D CrossVector,
-            out double Bearing,
-            out double RBearing,
-            out double Deviation,
-            out double Track
-        )
-        {
-
-            Vector3D LOCWaypointNorm = Vector3D.Normalize(LOCWaypointVector); // Is this needed??
-
-
-            
-        }*/
 
 
         public void CalculateILSGlideSlope(Vector3D GSWaypointVector, out double Angle)

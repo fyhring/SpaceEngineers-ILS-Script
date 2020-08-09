@@ -114,7 +114,7 @@ namespace IngameScript
             {
                 if (ILSData.Rotation == null)
                 {
-                    DrawCross(ref Frame);
+                    DrawCross(ref Frame, "ILS");
                     return;
                 }
 
@@ -155,7 +155,7 @@ namespace IngameScript
                     ArrowHead.RotationOrScale = ToRadian(ArrowRotation);
                     Frame.Add(ArrowHead);
 
-                
+
                     // Deviation bar
                     float DConstant = Deviation / (float)LOCFullScaleDeflectionAngle * (Size.Y * 0.4f);
                     float Dx = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DConstant * -1;
@@ -170,46 +170,50 @@ namespace IngameScript
                     DeviationBar.Color = Color.LawnGreen.Alpha(1f);
                     DeviationBar.RotationOrScale = ToRadian(ArrowRotation);
                     Frame.Add(DeviationBar);
+
+
+
+                    // Localizer Deviation Scale
+                    float DSM2 = -1.0f * (Size.Y * 0.4f);
+                    float DSM1 = -0.5f * (Size.Y * 0.4f);
+                    float DSP1 = 0.5f * (Size.Y * 0.4f);
+                    float DSP2 = 1.0f * (Size.Y * 0.4f);
+
+
+                    float DSM2x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSM2 * -1;
+                    float DSM2y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSM2;
+
+                    float DSM1x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSM1 * -1;
+                    float DSM1y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSM1;
+
+                    float DSP1x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSP1 * -1;
+                    float DSP1y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSP1;
+
+                    float DSP2x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSP2 * -1;
+                    float DSP2y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSP2;
+
+                    MySprite DSM2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM2x, DSM2y), new Vector2(CircleSize, CircleSize) * 0.1f);
+                    MySprite DSM1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM1x, DSM1y), new Vector2(CircleSize, CircleSize) * 0.1f);
+                    MySprite DSCSprite = MySprite.CreateSprite("Circle", Center, new Vector2(CircleSize, CircleSize) * 0.1f);
+                    MySprite DSP1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP1x, DSP1y), new Vector2(CircleSize, CircleSize) * 0.1f);
+                    MySprite DSP2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP2x, DSP2y), new Vector2(CircleSize, CircleSize) * 0.1f);
+
+                    DSM2Sprite.Color = CockpitFGColor.Alpha(1f);
+                    DSM1Sprite.Color = CockpitFGColor.Alpha(1f);
+                    DSCSprite.Color = CockpitFGColor.Alpha(1f);
+                    DSP1Sprite.Color = CockpitFGColor.Alpha(1f);
+                    DSP2Sprite.Color = CockpitFGColor.Alpha(1f);
+
+                    Frame.Add(DSM2Sprite);
+                    Frame.Add(DSM1Sprite);
+                    Frame.Add(DSCSprite);
+                    Frame.Add(DSP1Sprite);
+                    Frame.Add(DSP2Sprite);
                 }
-
-
-
-                // Localizer Deviation Scale
-                float DSM2 = -1.0f * (Size.Y * 0.4f);
-                float DSM1 = -0.5f * (Size.Y * 0.4f);
-                float DSP1 = 0.5f * (Size.Y * 0.4f);
-                float DSP2 = 1.0f * (Size.Y * 0.4f);
-                
-
-                float DSM2x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSM2 * -1;
-                float DSM2y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSM2;
-
-                float DSM1x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSM1 * -1;
-                float DSM1y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSM1;
-
-                float DSP1x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSP1 * -1;
-                float DSP1y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSP1;
-
-                float DSP2x = (float)Math.Sin(ToRadian(ArrowRotation + 90)) * DSP2 * -1;
-                float DSP2y = (float)Math.Cos(ToRadian(ArrowRotation + 90)) * DSP2;
-
-                MySprite DSM2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM2x, DSM2y), new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSM1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSM1x, DSM1y), new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSCSprite = MySprite.CreateSprite("Circle", Center, new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSP1Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP1x, DSP1y), new Vector2(CircleSize, CircleSize) * 0.1f);
-                MySprite DSP2Sprite = MySprite.CreateSprite("Circle", Center + new Vector2(DSP2x, DSP2y), new Vector2(CircleSize, CircleSize) * 0.1f);
-
-                DSM2Sprite.Color = CockpitFGColor.Alpha(1f);
-                DSM1Sprite.Color = CockpitFGColor.Alpha(1f);
-                DSCSprite.Color = CockpitFGColor.Alpha(1f);
-                DSP1Sprite.Color = CockpitFGColor.Alpha(1f);
-                DSP2Sprite.Color = CockpitFGColor.Alpha(1f);
-
-                Frame.Add(DSM2Sprite);
-                Frame.Add(DSM1Sprite);
-                Frame.Add(DSCSprite);
-                Frame.Add(DSP1Sprite);
-                Frame.Add(DSP2Sprite);
+                else
+                {
+                    DrawCross(ref Frame);
+                }
 
 
                 // GlideSlope
@@ -246,7 +250,10 @@ namespace IngameScript
                 Frame.Add(GDSP1Sprite);
                 Frame.Add(GDSP2Sprite);
 
-                Frame.Add(GSDiamond);
+                if (!ILSData.FailGlideSlope)
+                {
+                    Frame.Add(GSDiamond);
+                }
 
                 // Re-center the center position.
                 Center += CenterSub;
@@ -257,7 +264,7 @@ namespace IngameScript
             {
                 if (VORData.Rotation == null)
                 {
-                    DrawCross(ref Frame);
+                    DrawCross(ref Frame, "VOR");
                     return;
                 }
 
@@ -382,7 +389,7 @@ namespace IngameScript
             {
                 if (NDBData.Rotation == null)
                 {
-                    DrawCross(ref Frame);
+                    DrawCross(ref Frame, "NDB");
                     return;
                 }
 
@@ -455,11 +462,11 @@ namespace IngameScript
                 string[] _lines = {
                     "RWY: " + CombinedData.ILSData.RunwayNumber.ToString(),
                     "DME: " + Math.Round(CombinedData.ILSData.Distance / 1000, 1).ToString(),
-                    "LDev: " + Math.Round(CombinedData.ILSData.LocalizerDeviation, 1).ToString(),
+                    /*"LDev: " + Math.Round(CombinedData.ILSData.LocalizerDeviation, 1).ToString(),
                     "ROT: " + CombinedData.ILSData.Rotation.ToString(),
                     "FailL: "+ CombinedData.ILSData.FailLocalizer.ToString(),
                     "GDev: "+ Math.Round(CombinedData.ILSData.GlideSlopeDeviation, 1).ToString(),
-                    /*"Bearing: "+ Math.Round(CombinedData.ILSData.Bearing, 0).ToString(),
+                    "Bearing: "+ Math.Round(CombinedData.ILSData.Bearing, 0).ToString(),
                     "Rel. Bearing: "+ Math.Round(CombinedData.ILSData.RelativeBearing, 0).ToString(),
                     "Track: "+ Math.Round(CombinedData.ILSData.Track, 0).ToString(),*/
                 };
@@ -509,8 +516,8 @@ namespace IngameScript
                     "DME: " + Math.Round(CombinedData.VORData.Distance / 1000, 1).ToString(),
                     "Radial: "+ Math.Round(CombinedData.VORData.Radial, 0).ToString(),
                     "OBS: "+ Math.Round(CombinedData.VORData.OBS, 0).ToString(),
-                    "HDG: "+ Math.Round(CombinedData.VORData.Heading, 0).ToString(),
-                    "DEV: "+ Math.Round(CombinedData.VORData.Deviation, 0).ToString()
+                    /*"HDG: "+ Math.Round(CombinedData.VORData.Heading, 0).ToString(),
+                    "DEV: "+ Math.Round(CombinedData.VORData.Deviation, 0).ToString()*/
                 };
 
                 List<string> Lines = new List<string>(_lines);
@@ -533,7 +540,7 @@ namespace IngameScript
             }
             
 
-            private static void DrawCross(ref MySpriteDrawFrame Frame)
+            private static void DrawCross(ref MySpriteDrawFrame Frame, string ServiceName = "")
             {
                 MySprite CrossDiagonal1 = MySprite.CreateSprite("SquareSimple", Center, new Vector2(12 * UnitX, 100 * UnitY));
                 CrossDiagonal1.RotationOrScale = ToRadian(45);
@@ -544,6 +551,20 @@ namespace IngameScript
                 CrossDiagonal2.RotationOrScale = ToRadian(-45);
                 CrossDiagonal2.Color = Color.Tomato;
                 Frame.Add(CrossDiagonal2);
+
+                if (ServiceName != "")
+                {
+                    Frame.Add(new MySprite()
+                    {
+                        Type = SpriteType.TEXT,
+                        Data = "No "+ ServiceName +" Connection!",
+                        Position = new Vector2(Center.X, Center.Y + 32 * UnitY),
+                        RotationOrScale = 1f,
+                        Color = Color.Tomato,
+                        Alignment = TextAlignment.CENTER,
+                        FontId = "White"
+                    });
+                }
             }
 
 
